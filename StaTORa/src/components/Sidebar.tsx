@@ -85,7 +85,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: "RH", href: "/committees/rh", requiredRoles: ["committee_rh", "super_admin"] },
       { label: "C/S", href: "/committees/cs", requiredRoles: ["committee_cs", "super_admin"] },
       { label: "CA Cervix", href: "/committees/ca-cervix", requiredRoles: ["committee_ca_cervix", "super_admin"] },
-      { label: "Ovarian Tumor", href: "/committees/ovarian-tumor", requiredRoles: ["committee_ovarian_tumor", "super_admin"] },
+      { label: "POP", href: "/committees/pop", requiredRoles: ["committee_pop", "super_admin"] },
     ],
   },
   {
@@ -362,5 +362,4 @@ const ROLE_LABELS: Record<string, string> = {
   committee_rh: "กก.RH",
   committee_cs: "กก.C/S",
   committee_ca_cervix: "กก.CA Cervix",
-  committee_ovarian_tumor: "กก.Ovarian",
 };
