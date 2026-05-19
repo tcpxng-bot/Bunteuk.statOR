@@ -370,3 +370,7 @@ export function subscribeToPreOpCasesByDate(
     callback(snap.docs.map((d) => d.data() as PreOpCaseDoc));
   });
 }
+
+export async function deleteOperation(id: string): Promise<void> {
+  await deleteDoc(doc(db, "operations", id));
+}
