@@ -6,26 +6,29 @@ import { AppShell } from "@/components/AppShell";
 import { getDropdownList, setDropdownList } from "@/lib/firestore";
 import { DropdownItem } from "@/types/database";
 
-type ListKey = "doctors" | "scrubNurses" | "circulateNurses" | "procedures";
+type ListKey = "surgeons" | "scrubNurses" | "circulateNurses" | "operatingRooms" | "procedures";
 
 const LIST_CONFIG: { key: ListKey; label: string; placeholder: string }[] = [
-  { key: "doctors", label: "รายชื่อแพทย์", placeholder: "เช่น นพ.สมชาย ใจดี" },
+  { key: "surgeons", label: "รายชื่อแพทย์", placeholder: "เช่น นพ.สมชาย ใจดี" },
   { key: "scrubNurses", label: "พยาบาล Scrub", placeholder: "เช่น พย.สมหญิง ขยัน" },
   { key: "circulateNurses", label: "พยาบาล Circulate", placeholder: "เช่น พย.สมศรี มานะ" },
+  { key: "operatingRooms", label: "ห้องผ่าตัด", placeholder: "เช่น OR1, OR2" },
   { key: "procedures", label: "หัตถการ (Procedures)", placeholder: "เช่น TAH, C/S, Hysteroscopy" },
 ];
 
 export default function DropdownsPage() {
   const [lists, setLists] = useState<Record<ListKey, DropdownItem[]>>({
-    doctors: [],
+    surgeons: [],
     scrubNurses: [],
     circulateNurses: [],
+    operatingRooms: [],
     procedures: [],
   });
   const [inputs, setInputs] = useState<Record<ListKey, string>>({
-    doctors: "",
+    surgeons: "",
     scrubNurses: "",
     circulateNurses: "",
+    operatingRooms: "",
     procedures: "",
   });
   const [loading, setLoading] = useState(true);
