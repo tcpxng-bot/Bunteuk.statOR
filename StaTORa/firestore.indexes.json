@@ -1,0 +1,80 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "operations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "year", "order": "ASCENDING" },
+        { "fieldPath": "month", "order": "ASCENDING" },
+        { "fieldPath": "operationDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "operations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "mainGroup", "order": "ASCENDING" },
+        { "fieldPath": "operationDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "operations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "mainGroup", "order": "ASCENDING" },
+        { "fieldPath": "year", "order": "ASCENDING" },
+        { "fieldPath": "quarter", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "operations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "procedureName", "order": "ASCENDING" },
+        { "fieldPath": "urgency", "order": "ASCENDING" },
+        { "fieldPath": "operationDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "operations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "postOpDiagnosis", "order": "ASCENDING" },
+        { "fieldPath": "operationDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "operations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "operationDate", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "preOpCases",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "operationDate", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "rrRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "operationId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "committeeIndicators",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "committeeType", "order": "ASCENDING" },
+        { "fieldPath": "operationId", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ═══════════════════════════════════════════
+    // Helper functions
+    // ═══════════════════════════════════════════
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasRole(role) {
+      return isSignedIn() && role in getUserData().roles;
+    }
+
+    function hasAnyRole(roles) {
+      return isSignedIn() && getUserData().roles.hasAny(roles);
+    }
+
+    function isSuperAdmin() {
+      return hasRole('super_admin');
+    }
+
+    // ═══════════════════════════════════════════
+    // Users collection
+    // ═══════════════════════════════════════════
+    match /users/{userId} {
+      // ทุกคนที่ login แล้วอ่านข้อมูลตัวเองได้
+      allow read: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      // เฉพาะ super_admin สร้าง/แก้ไข account
+      allow create, update: if isSuperAdmin();
+      allow delete: if false; // ไม่ลบ user, ใช้ isActive แทน
+    }
+
+    // ═══════════════════════════════════════════
+    // Statistician assignments
+    // ═══════════════════════════════════════════
+    match /statisticianAssignments/{yearMonth} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
+    // ═══════════════════════════════════════════
+    // Operations collection
+    // ═══════════════════════════════════════════
+    match /operations/{operationId} {
+      // ทุก role ที่ login แล้วอ่านได้ (dashboard, summary)
+      allow read: if isSignedIn();
+
+      // คนเก็บสถิติ + super_admin เขียนได้
+      allow create: if hasAnyRole(['statistician', 'super_admin']);
+      allow update: if hasAnyRole(['statistician', 'super_admin']);
+      allow delete: if isSuperAdmin();
+    }
+
+    // ═══════════════════════════════════════════
+    // Pre-Op Cases (หน่วยเปล)
+    // ═══════════════════════════════════════════
+    match /preOpCases/{caseId} {
+      allow read: if isSignedIn();
+      // หน่วยเปล + super_admin เขียนได้
+      allow create, update: if hasAnyRole(['stretcher_unit', 'super_admin']);
+      allow delete: if isSuperAdmin();
+    }
+
+    // ═══════════════════════════════════════════
+    // RR Records
+    // ═══════════════════════════════════════════
+    match /rrRecords/{rrId} {
+      allow read: if isSignedIn();
+      // RR Incharge + super_admin เขียนได้
+      allow create, update: if hasAnyRole(['rr_incharge', 'super_admin']);
+      allow delete: if isSuperAdmin();
+    }
+
+    // ═══════════════════════════════════════════
+    // Committee Indicators
+    // ═══════════════════════════════════════════
+    match /committeeIndicators/{indicatorId} {
+      allow read: if isSignedIn();
+
+      // กรรมการแต่ละคนกรอกของตัวเอง + super_admin
+      allow create, update: if hasAnyRole([
+        'committee_hystero',
+        'committee_tah',
+        'committee_lh_tlh',
+        'committee_rh',
+        'committee_cs',
+        'committee_ca_cervix',
+        'committee_ovarian_tumor',
+        'super_admin'
+      ]);
+      allow delete: if isSuperAdmin();
+    }
+
+    // ═══════════════════════════════════════════
+    // Dropdown Lists (admin-managed)
+    // ═══════════════════════════════════════════
+    match /dropdownLists/{listName} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+  }
+}
