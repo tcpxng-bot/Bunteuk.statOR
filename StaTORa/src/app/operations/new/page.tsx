@@ -1,14 +1,92 @@
 // src/app/operations/new/page.tsx
 "use client";
 
-import { useState, useMemo, FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useEffect, FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { PreOpCaseDoc } from "@/types/database";
 import { Timestamp } from "firebase/firestore";
 import { AppShell } from "@/components/AppShell";
 import { Field, Select, TextInput, Toggle, PillSelect, Textarea } from "@/components/FormFields";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDropdownList, useProceduresByMainGroup } from "@/hooks/useDropdowns";
-import { createOperation } from "@/lib/firestore";
+import { createOperation, createRRRecord, setDropdownList, getDropdownList, updatePreOpCase } from "@/lib/firestore";
+import { DropdownItem } from "@/types/database";
+
+// ── Inline Add Select ──────────────────────────
+function InlineAddSelect({
+  value, onChange, items, placeholder, listName,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  items: DropdownItem[];
+  placeholder: string;
+  listName: string;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [newVal, setNewVal] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function handleAdd() {
+    const val = newVal.trim();
+    if (!val) return;
+    setSaving(true);
+    const existing = await getDropdownList(listName);
+    const currentItems = existing?.items ?? [];
+    if (!currentItems.some((i) => i.value === val)) {
+      const newItem: DropdownItem = { value: val, label: val, isActive: true, sortOrder: currentItems.length };
+      await setDropdownList(listName, { listName, items: [...currentItems, newItem], updatedBy: "" });
+    }
+    onChange(val);
+    setNewVal("");
+    setAdding(false);
+    setSaving(false);
+  }
+
+  if (adding) {
+    return (
+      <div className="flex gap-2">
+        <input
+          autoFocus
+          type="text"
+          value={newVal}
+          onChange={(e) => setNewVal(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); if (e.key === "Escape") setAdding(false); }}
+          placeholder="พิมพ์แล้วกด Enter"
+          className="flex-1 rounded-lg border border-teal-400 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+        />
+        <button onClick={handleAdd} disabled={saving} className="px-3 py-2 rounded-lg bg-teal-600 text-white text-sm disabled:opacity-50">
+          {saving ? "..." : "เพิ่ม"}
+        </button>
+        <button onClick={() => setAdding(false)} className="px-3 py-2 rounded-lg border border-gray-200 text-sm">ยกเลิก</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-2">
+      <div className="flex-1">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+        >
+          <option value="">{placeholder}</option>
+          {items.map((i) => <option key={i.value} value={i.value}>{i.label}</option>)}
+        </select>
+      </div>
+      <button
+        type="button"
+        onClick={() => setAdding(true)}
+        className="px-3 py-2 rounded-lg border border-gray-200 text-teal-600 text-sm hover:bg-teal-50 transition-colors whitespace-nowrap"
+        title="เพิ่มรายการใหม่"
+      >
+        + เพิ่ม
+      </button>
+    </div>
+  );
+}
 import {
   MAIN_GROUPS,
   URGENCY_TYPES,
@@ -61,6 +139,11 @@ interface ORFormState {
 
   // NOTES specific
   isNotesAssistHysterectomy: boolean;
+
+  // Post-op transfer & consult
+  postOpTransfer: "RR" | "ICU_NO_RR" | "ER_CONDITION_RR" | "HOME" | "UNPLANNED_ICU" | "";
+  unplannedConsult: boolean;
+  preOpCaseId: string;
 }
 
 const INITIAL_STATE: ORFormState = {
@@ -88,6 +171,9 @@ const INITIAL_STATE: ORFormState = {
   fluidBalance: "",
   unplannedAdmission: false,
   isNotesAssistHysterectomy: false,
+  postOpTransfer: "",
+  unplannedConsult: false,
+  preOpCaseId: "",
 };
 
 export default function NewOperationPage() {
@@ -97,6 +183,23 @@ export default function NewOperationPage() {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saveMsg, setSaveMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const searchParams = useSearchParams();
+
+  // Pre-fill from หน่วยเปล case
+  useEffect(() => {
+    const preOpId = searchParams.get("from");
+    if (!preOpId) return;
+    getDoc(doc(db, "preOpCases", preOpId)).then((snap) => {
+      if (!snap.exists()) return;
+      const c = snap.data() as PreOpCaseDoc;
+      setForm((prev) => ({
+        ...prev,
+        procedureName: c.procedureName || prev.procedureName,
+        surgeon: c.surgeon || prev.surgeon,
+        diagnosisGroup: (c.preOpDiagnosis as any) || prev.diagnosisGroup,
+      }));
+    });
+  }, [searchParams]);
 
   // Dropdowns
   const { procedures } = useProceduresByMainGroup(form.mainGroup as MainGroup || null);
@@ -174,7 +277,7 @@ export default function NewOperationPage() {
       const endDate = new Date(opDate);
       endDate.setHours(eh, em, 0);
 
-      await createOperation({
+      const newOpId = await createOperation({
         operationDate: Timestamp.fromDate(opDate),
         mainGroup: form.mainGroup as MainGroup,
         urgency: (form.urgency || "Elective") as Urgency,
@@ -208,9 +311,37 @@ export default function NewOperationPage() {
         // NOTES
         ...(isNotes && { isNotesAssistHysterectomy: form.isNotesAssistHysterectomy }),
 
+        // Post-op transfer & consult
+        ...(form.postOpTransfer && { postOpTransfer: form.postOpTransfer as any }),
+        unplannedConsult: form.unplannedConsult,
+        ...(form.preOpCaseId && { preOpCaseId: form.preOpCaseId }),
+
         createdBy: user?.uid || "",
         status,
       });
+
+      // ถ้า transfer ไม่ผ่าน RR → auto-create RR record
+      if (form.postOpTransfer && form.postOpTransfer !== "RR" && newOpId) {
+        await createRRRecord({
+          operationId: newOpId,
+          postOpRoute: form.postOpTransfer as any,
+          anesthesiaType: (form.anesthesiaType || "GA") as any,
+          airway: "NONE",
+          patientLevel: "LEVEL_2",
+          hasChill: false,
+          hasHypothermia: false,
+          hasHypoxia: false,
+          painScoreNRS: 0,
+          painScoreVRS: "NO_PAIN",
+          createdBy: user?.uid || "",
+          isAutoFilled: true,
+        });
+      }
+
+      // link preOpCase กับ operation ที่สร้าง
+      if (form.preOpCaseId && newOpId) {
+        await updatePreOpCase(form.preOpCaseId, { operationId: newOpId });
+      }
 
       setSaveMsg({ type: "success", text: `บันทึก${status === "confirmed" ? "สำเร็จ" : " draft สำเร็จ"}` });
 
@@ -350,34 +481,33 @@ export default function NewOperationPage() {
             </div>
 
             <Field label="แพทย์ผ่าตัด" required error={errors.surgeon}>
-              <Select
+              <InlineAddSelect
                 value={form.surgeon}
                 onChange={(v) => set("surgeon", v)}
-                options={surgeons.map((s) => ({ value: s.value, label: s.label }))}
+                items={surgeons}
                 placeholder="เลือกแพทย์"
+                listName="surgeons"
               />
             </Field>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Scrub Nurse">
-                <Select
+                <InlineAddSelect
                   value={form.scrubNurse}
                   onChange={(v) => set("scrubNurse", v)}
-                  options={[
-                    { value: "", label: "—" },
-                    ...scrubNurses.map((s) => ({ value: s.value, label: s.label })),
-                  ]}
+                  items={scrubNurses}
+                  placeholder="เลือก Scrub Nurse"
+                  listName="scrubNurses"
                 />
               </Field>
 
               <Field label="Circulate Nurse">
-                <Select
+                <InlineAddSelect
                   value={form.circulateNurse}
                   onChange={(v) => set("circulateNurse", v)}
-                  options={[
-                    { value: "", label: "—" },
-                    ...circulateNurses.map((s) => ({ value: s.value, label: s.label })),
-                  ]}
+                  items={circulateNurses}
+                  placeholder="เลือก Circulate Nurse"
+                  listName="circulateNurses"
                 />
               </Field>
             </div>
@@ -428,7 +558,7 @@ export default function NewOperationPage() {
           {/* ═══════════════════════════════
               Section 4: Complication
           ═══════════════════════════════ */}
-          <Section title="Complication">
+          <Section title="Complication & Consult">
             <Toggle
               checked={form.hasComplication}
               onChange={(v) => set("hasComplication", v)}
@@ -445,6 +575,46 @@ export default function NewOperationPage() {
                   rows={3}
                 />
               </Field>
+            )}
+
+            <Toggle
+              checked={form.unplannedConsult}
+              onChange={(v) => set("unplannedConsult", v)}
+              label="Unplanned Consult in OR"
+              description="มีการ consult โดยไม่ได้วางแผนล่วงหน้า"
+            />
+          </Section>
+
+          {/* Post-op Transfer */}
+          <Section title="ย้ายผู้ป่วยหลังผ่าตัด">
+            <Field label="ย้ายไปที่" hint="เลือกเส้นทางหลังผ่าตัด">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {([
+                  { value: "RR", label: "ไป RR" },
+                  { value: "ICU_NO_RR", label: "ICU (ไม่ผ่าน RR)" },
+                  { value: "ER_CONDITION_RR", label: "ER Condition RR" },
+                  { value: "HOME", label: "กลับบ้าน" },
+                  { value: "UNPLANNED_ICU", label: "Unplanned ICU" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => set("postOpTransfer", form.postOpTransfer === opt.value ? "" : opt.value)}
+                    className={`rounded-xl px-3 py-2 text-sm font-medium border transition-colors ${
+                      form.postOpTransfer === opt.value
+                        ? "bg-teal-600 text-white border-teal-600"
+                        : "bg-white text-gray-600 border-gray-200 hover:border-teal-300"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            {form.postOpTransfer && form.postOpTransfer !== "RR" && (
+              <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+                ⚠️ ระบบจะ auto-บันทึก RR record ให้อัตโนมัติ — RR Incharge สามารถแก้ไขเพิ่มเติมได้ภายหลัง
+              </p>
             )}
           </Section>
 
