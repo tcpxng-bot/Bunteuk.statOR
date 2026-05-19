@@ -111,7 +111,7 @@ interface ORFormState {
   mainGroup: MainGroup | "";
   urgency: Urgency | "";
   procedureName: string;
-  diagnosisGroup: DiagnosisGroup | "";
+  diagnosisGroup: string;
   surgeon: string;
   startTime: string;
   endTime: string;
@@ -120,7 +120,7 @@ interface ORFormState {
   complicationNote: string;
 
   // Optional
-  postOpDiagnosis: DiagnosisGroup | "";
+  postOpDiagnosis: string;
   gender: Gender | "";
   ageRange: AgeRange | "";
   asaClass: ASAClass | "";
@@ -280,7 +280,7 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
         mainGroup: form.mainGroup as MainGroup,
         urgency: (form.urgency || "Elective") as Urgency,
         procedureName: form.procedureName,
-        diagnosisGroup: (form.diagnosisGroup || "Benign") as DiagnosisGroup,
+        diagnosisGroup: (form.diagnosisGroup || "Benign") as any,
         surgeon: form.surgeon,
         startTime: Timestamp.fromDate(startDate),
         endTime: Timestamp.fromDate(endDate),
@@ -289,7 +289,7 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
         complicationNote: form.complicationNote,
 
         // Optional
-        ...(form.postOpDiagnosis && { postOpDiagnosis: form.postOpDiagnosis as DiagnosisGroup }),
+        ...(form.postOpDiagnosis && { postOpDiagnosis: form.postOpDiagnosis as any }),
         ...(form.gender && { gender: form.gender as Gender }),
         ...(form.ageRange && { ageRange: form.ageRange as AgeRange }),
         ...(form.asaClass && { asaClass: form.asaClass as ASAClass }),
@@ -428,23 +428,21 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
           ═══════════════════════════════ */}
           <Section title="ข้อมูลผู้ป่วย & ทีมผ่าตัด">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Pre-op Diagnosis" required error={errors.diagnosisGroup}>
-                <Select
+              <Field label="Pre-op Diagnosis" required error={errors.diagnosisGroup} hint="prefill จากหน่วยเปล หรือพิมพ์เอง">
+                <TextInput
                   value={form.diagnosisGroup}
-                  onChange={(v) => set("diagnosisGroup", v as ORFormState["diagnosisGroup"])}
-                  options={DIAGNOSIS_GROUPS.map((d) => ({ value: d, label: d }))}
-                  placeholder="เลือก Diagnosis"
+                  onChange={(v) => set("diagnosisGroup", v)}
+                  placeholder="เช่น Benign, POP, CA cervix..."
                 />
               </Field>
 
               <Field label="Post-op Diagnosis">
-                <Select
+                <InlineAddSelect
                   value={form.postOpDiagnosis}
-                  onChange={(v) => set("postOpDiagnosis", v as ORFormState["postOpDiagnosis"])}
-                  options={[
-                    { value: "", label: "—" },
-                    ...DIAGNOSIS_GROUPS.map((d) => ({ value: d, label: d })),
-                  ]}
+                  onChange={(v) => set("postOpDiagnosis", v)}
+                  items={DIAGNOSIS_GROUPS.map((d) => ({ value: d, label: d, isActive: true, sortOrder: 0 }))}
+                  placeholder="เลือกหรือเพิ่ม Post-op Diagnosis"
+                  listName="postOpDiagnoses"
                 />
               </Field>
             </div>
