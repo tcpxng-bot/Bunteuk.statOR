@@ -374,3 +374,24 @@ export function subscribeToPreOpCasesByDate(
 export async function deleteOperation(id: string): Promise<void> {
   await deleteDoc(doc(db, "operations", id));
 }
+
+export async function checkDuplicateOperation(
+  operationDate: Date,
+  procedureName: string,
+  surgeon: string
+): Promise<boolean> {
+  const start = new Date(operationDate);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(operationDate);
+  end.setHours(23, 59, 59, 999);
+
+  const q = query(
+    collection(db, "operations"),
+    where("operationDate", ">=", Timestamp.fromDate(start)),
+    where("operationDate", "<=", Timestamp.fromDate(end)),
+    where("procedureName", "==", procedureName),
+    where("surgeon", "==", surgeon)
+  );
+  const snap = await getDocs(q);
+  return !snap.empty;
+}
