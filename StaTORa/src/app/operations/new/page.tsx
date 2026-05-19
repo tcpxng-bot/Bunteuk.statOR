@@ -11,7 +11,7 @@ import { AppShell } from "@/components/AppShell";
 import { Field, Select, TextInput, Toggle, PillSelect, Textarea } from "@/components/FormFields";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDropdownList, useProceduresByMainGroup } from "@/hooks/useDropdowns";
-import { createOperation, createRRRecord, setDropdownList, getDropdownList, updatePreOpCase } from "@/lib/firestore";
+import { createOperation, createRRRecord, setDropdownList, getDropdownList, updatePreOpCase, checkDuplicateOperation } from "@/lib/firestore";
 import { DropdownItem } from "@/types/database";
 
 // ── Inline Add Select ──────────────────────────
@@ -369,7 +369,7 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
           กรอกข้อมูลหัตถการ — ช่องที่มี <span className="text-red-400">*</span> ต้องกรอก
         </p>
 
-        <form onSubmit={(e) => handleSubmit(e, "confirmed")} className="space-y-8">
+        <form onSubmit={(e) => handleSubmit(e, "confirmed")} id="form-main" className="space-y-8">
           {/* ═══════════════════════════════
               Section 1: ข้อมูลหลัก
           ═══════════════════════════════ */}
