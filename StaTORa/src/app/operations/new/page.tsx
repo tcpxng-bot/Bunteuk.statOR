@@ -16,13 +16,14 @@ import { DropdownItem } from "@/types/database";
 
 // ── Inline Add Select ──────────────────────────
 function InlineAddSelect({
-  value, onChange, items, placeholder, listName,
+  value, onChange, items, placeholder, listName, mainGroup,
 }: {
   value: string;
   onChange: (v: string) => void;
   items: DropdownItem[];
   placeholder: string;
   listName: string;
+  mainGroup?: string;
 }) {
   const [adding, setAdding] = useState(false);
   const [newVal, setNewVal] = useState("");
@@ -32,13 +33,15 @@ function InlineAddSelect({
     const val = newVal.trim();
     if (!val) return;
     setSaving(true);
-    const existing = await getDropdownList(listName);
-    const currentItems = existing?.items ?? [];
-    if (!currentItems.some((i) => i.value === val)) {
-      const newItem: DropdownItem = { value: val, label: val, isActive: true, sortOrder: currentItems.length };
-      await setDropdownList(listName, { listName, items: [...currentItems, newItem], updatedBy: "" });
-    }
-    onChange(val);
+    try {
+      const existing = await getDropdownList(listName);
+      const currentItems = existing?.items ?? [];
+      if (!currentItems.some((i) => i.value === val)) {
+        const newItem: DropdownItem = { value: val, label: val, isActive: true, sortOrder: currentItems.length, ...(mainGroup ? { mainGroup: mainGroup as any } : {}) };
+        await setDropdownList(listName, { listName, items: [...currentItems, newItem], updatedBy: "" });
+      }
+      onChange(val);
+    } catch(e) { console.error("InlineAddSelect error:", e); }
     setNewVal("");
     setAdding(false);
     setSaving(false);
@@ -414,6 +417,7 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
                   items={procedures}
                   placeholder="เลือกหรือพิมพ์เพิ่มหัตถการ"
                   listName="procedures"
+                  mainGroup={form.mainGroup || undefined}
                 />
               ) : (
                 <div className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400">
