@@ -17,7 +17,7 @@ export const ROLES = [
   "committee_rh",
   "committee_cs",
   "committee_ca_cervix",
-  "committee_ovarian_tumor",
+  "committee_pop",
 ] as const;
 
 export type Role = (typeof ROLES)[number];
@@ -125,6 +125,11 @@ export interface OperationDoc {
   scrubNurse?: string;
   circulateNurse?: string;
 
+  // ── Post-op transfer ──
+  postOpTransfer?: "RR" | "ICU_NO_RR" | "ER_CONDITION_RR" | "HOME" | "UNPLANNED_ICU";
+  unplannedConsult?: boolean; // Unplanned consult in OR
+  preOpCaseId?: string; // link กับ preOpCase ของหน่วยเปล
+
   // ── OB/C/S specific ──
   ebl?: number; // cc — auto flag PPH if >1000
   isPPH?: boolean; // auto: ebl > 1000
@@ -158,6 +163,14 @@ export interface PreOpCaseDoc {
   hnLast3: string; // เช่น "123" → แสดงเป็น HN-xxxx123
   setReady: boolean; // จัด Set เรียบร้อย ✓
   chargeWritten: boolean; // เขียน Charge เรียบร้อย ✓
+
+  // Plan Consult (หน่วยเปลระบุล่วงหน้า)
+  planConsultUro?: boolean; // plan consult uro
+  planConsultColo?: boolean; // plan consult colo
+
+  // ติดตามผลการผ่าตัด (หน่วยเปลอัปเดต)
+  surgeryStatus?: "success" | "postponed" | "cancelled";
+  surgeryStatusNote?: string; // หมายเหตุ
 
   // Link to operation (หลังจากสร้าง operation record)
   operationId?: string;
@@ -201,6 +214,7 @@ export interface RRRecordDoc {
   preOpPainScoreNRS?: number;
 
   // ── Metadata ──
+  isAutoFilled?: boolean; // auto-created เมื่อไม่ผ่าน RR
   createdBy: string; // RR Incharge uid
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -255,7 +269,7 @@ export const COMMITTEE_TYPES = [
   "HYSTERO",
   "CA_CERVIX",
   "RH",
-  "OVARIAN_TUMOR",
+  "POP",
 ] as const;
 export type CommitteeType = (typeof COMMITTEE_TYPES)[number];
 
@@ -295,7 +309,7 @@ export function interpretPainScore(
       return nrs <= 5 ? "NRS ≤5 (ผ่าน)" : "NRS >5 (ไม่ผ่าน)";
     case "CA_CERVIX":
     case "RH":
-    case "OVARIAN_TUMOR":
+    case "POP":
       if (nrs <= 3) return "NRS ≤3";
       if (nrs <= 5) return "NRS 4-5";
       return "NRS >5";
