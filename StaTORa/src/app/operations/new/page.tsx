@@ -407,13 +407,19 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
             </Field>
 
             <Field label="หัตถการ" required error={errors.procedureName}>
-              <Select
-                value={form.procedureName}
-                onChange={(v) => set("procedureName", v)}
-                options={procedures.map((p) => ({ value: p.value, label: p.label }))}
-                placeholder={form.mainGroup ? "เลือกหัตถการ" : "เลือก Main Group ก่อน"}
-                disabled={!form.mainGroup}
-              />
+              {form.mainGroup ? (
+                <InlineAddSelect
+                  value={form.procedureName}
+                  onChange={(v) => set("procedureName", v)}
+                  items={procedures}
+                  placeholder="เลือกหรือพิมพ์เพิ่มหัตถการ"
+                  listName="procedures"
+                />
+              ) : (
+                <div className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400">
+                  เลือก Main Group ก่อน
+                </div>
+              )}
             </Field>
           </Section>
 
