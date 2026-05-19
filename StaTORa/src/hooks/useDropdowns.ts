@@ -31,8 +31,9 @@ export function useDropdownList(listName: string) {
 export function useProceduresByMainGroup(mainGroup: MainGroup | null) {
   const { items, loading } = useDropdownList("procedures");
 
+  // แสดง items ที่ตรง mainGroup หรือ items ที่ไม่ได้ระบุ mainGroup (ใช้ได้ทุก group)
   const filtered = mainGroup
-    ? items.filter((i) => i.mainGroup === mainGroup)
+    ? items.filter((i) => !i.mainGroup || i.mainGroup === mainGroup)
     : items;
 
   return { procedures: filtered, loading };
