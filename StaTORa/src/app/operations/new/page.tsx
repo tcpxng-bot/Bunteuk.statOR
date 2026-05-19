@@ -176,18 +176,15 @@ const INITIAL_STATE: ORFormState = {
   preOpCaseId: "",
 };
 
-function NewOperationPageInner() {
+function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
   const router = useRouter();
   const { user } = useAuth();
   const [form, setForm] = useState<ORFormState>(INITIAL_STATE);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saveMsg, setSaveMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const searchParams = useSearchParams();
-
-  // Pre-fill from หน่วยเปล case
+  // Pre-fill from หน่วยเปล case — preOpId passed as prop from parent
   useEffect(() => {
-    const preOpId = searchParams.get("from");
     if (!preOpId) return;
     getDoc(doc(db, "preOpCases", preOpId)).then((snap) => {
       if (!snap.exists()) return;
@@ -197,9 +194,10 @@ function NewOperationPageInner() {
         procedureName: c.procedureName || prev.procedureName,
         surgeon: c.surgeon || prev.surgeon,
         diagnosisGroup: (c.preOpDiagnosis as any) || prev.diagnosisGroup,
+        preOpCaseId: preOpId,
       }));
     });
-  }, [searchParams]);
+  }, [preOpId]);
 
   // Dropdowns
   const { procedures } = useProceduresByMainGroup(form.mainGroup as MainGroup || null);
@@ -788,10 +786,16 @@ function Section({
   );
 }
 
+function SearchParamsReader() {
+  const searchParams = useSearchParams();
+  const preOpId = searchParams.get("from") ?? undefined;
+  return <NewOperationPageInner preOpId={preOpId} />;
+}
+
 export default function NewOperationPage() {
   return (
     <Suspense fallback={<div className="flex h-screen items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-500 border-t-transparent" /></div>}>
-      <NewOperationPageInner />
+      <SearchParamsReader />
     </Suspense>
   );
 }
