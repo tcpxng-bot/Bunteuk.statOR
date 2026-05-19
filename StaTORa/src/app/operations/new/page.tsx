@@ -1,7 +1,7 @@
 // src/app/operations/new/page.tsx
 "use client";
 
-import { useState, useMemo, useEffect, FormEvent } from "react";
+import { useState, useMemo, useEffect, FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -176,7 +176,7 @@ const INITIAL_STATE: ORFormState = {
   preOpCaseId: "",
 };
 
-export default function NewOperationPage() {
+function NewOperationPageInner() {
   const router = useRouter();
   const { user } = useAuth();
   const [form, setForm] = useState<ORFormState>(INITIAL_STATE);
@@ -785,5 +785,13 @@ function Section({
       <h2 className="text-base font-medium text-gray-900">{title}</h2>
       {children}
     </div>
+  );
+}
+
+export default function NewOperationPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-500 border-t-transparent" /></div>}>
+      <NewOperationPageInner />
+    </Suspense>
   );
 }
