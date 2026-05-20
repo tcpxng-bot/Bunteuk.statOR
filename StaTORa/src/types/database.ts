@@ -65,6 +65,27 @@ export type Urgency = (typeof URGENCY_TYPES)[number];
 export const ANESTHESIA_TYPES_OR = ["GA", "Spinal", "Epidural", "LA"] as const;
 export type AnesthesiaTypeOR = (typeof ANESTHESIA_TYPES_OR)[number];
 
+export const COMPLICATION_TYPES = [
+  "ADJACENT_ORGAN_INJURY",   // การบาดเจ็บอวัยวะข้างเคียง
+  "FOREIGN_BODY_RETAINED",   // ลืมสิ่งแปลกปลอมในร่างกาย
+  "WOUND_INFECTION",         // การติดเชื้อของแผลผ่าตัด
+  "PREVENTABLE_INCIDENT",    // อุบัติเหตุที่ป้องกันได้ (จัดท่า/Burn/PI)
+  "UNPLANNED_ADMISSION",     // Unplanned admission
+  "UNPLANNED_ICU",           // Unplanned ICU
+  "OTHER",                   // อื่นๆ
+] as const;
+export type ComplicationType = (typeof COMPLICATION_TYPES)[number];
+
+export const COMPLICATION_LABELS: Record<ComplicationType, string> = {
+  ADJACENT_ORGAN_INJURY: "การบาดเจ็บอวัยวะข้างเคียง",
+  FOREIGN_BODY_RETAINED: "ลืมสิ่งแปลกปลอมในร่างกาย",
+  WOUND_INFECTION: "การติดเชื้อของแผลผ่าตัด",
+  PREVENTABLE_INCIDENT: "อุบัติเหตุที่ป้องกันได้ (จัดท่า/Burn/PI)",
+  UNPLANNED_ADMISSION: "Unplanned admission",
+  UNPLANNED_ICU: "Unplanned ICU",
+  OTHER: "อื่นๆ",
+};
+
 export const ANESTHESIA_TYPES_RR = [
   "GA",
   "RA",
@@ -118,6 +139,7 @@ export interface OperationDoc {
   anesthesiaType: AnesthesiaTypeOR;
   hasComplication: boolean;
   complicationNote: string;
+  complicationTypes?: ComplicationType[]; // ประเภท complication ที่เลือก
 
   // ── Optional fields ──
   postOpDiagnosis?: DiagnosisGroup;
