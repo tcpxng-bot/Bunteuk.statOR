@@ -148,12 +148,42 @@ export default function OperationDetailPage() {
             <Row label="ASA" value={op.asaClass} />
           </div>
 
+          {/* Team */}
+          {(op.assistantSurgeons && op.assistantSurgeons.length > 0) && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+              <h2 className="font-medium text-gray-700 mb-3 text-sm">ทีมแพทย์</h2>
+              <Row label="แพทย์ร่วมผ่าตัด" value={
+                <div className="flex flex-wrap gap-1.5 justify-end">
+                  {op.assistantSurgeons.map((s) => (
+                    <span key={s} className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs">{s}</span>
+                  ))}
+                </div>
+              } />
+            </div>
+          )}
+
           {/* Nursing */}
-          {(op.scrubNurse || op.circulateNurse) && (
+          {(op.scrubNurse || op.circulateNurse || (op.scrubNurses && op.scrubNurses.length > 0) || (op.circulateNurses && op.circulateNurses.length > 0)) && (
             <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
               <h2 className="font-medium text-gray-700 mb-3 text-sm">พยาบาล</h2>
-              <Row label="Scrub Nurse" value={op.scrubNurse} />
-              <Row label="Circulate Nurse" value={op.circulateNurse} />
+              <Row label="Scrub Nurse" value={
+                op.scrubNurses && op.scrubNurses.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 justify-end">
+                    {op.scrubNurses.map((s) => (
+                      <span key={s} className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded text-xs">{s}</span>
+                    ))}
+                  </div>
+                ) : op.scrubNurse
+              } />
+              <Row label="Circulate Nurse" value={
+                op.circulateNurses && op.circulateNurses.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 justify-end">
+                    {op.circulateNurses.map((s) => (
+                      <span key={s} className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded text-xs">{s}</span>
+                    ))}
+                  </div>
+                ) : op.circulateNurse
+              } />
             </div>
           )}
 
