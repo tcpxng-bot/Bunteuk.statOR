@@ -135,6 +135,7 @@ export interface OperationDoc {
   postOpTransfer?: "RR" | "ICU_NO_RR" | "ER_CONDITION_RR" | "HOME" | "UNPLANNED_ICU";
   unplannedConsult?: boolean; // Unplanned consult in OR
   preOpCaseId?: string; // link กับ preOpCase ของหน่วยเปล
+  hnLast3?: string; // HN 3 หลักท้าย (copy จาก preOpCase)
 
   // ── OB/C/S specific ──
   ebl?: number; // cc — auto flag PPH if >1000
