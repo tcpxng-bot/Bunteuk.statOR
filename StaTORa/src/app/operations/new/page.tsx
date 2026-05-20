@@ -191,6 +191,9 @@ import {
   URGENCY_TYPES,
   ANESTHESIA_TYPES_OR,
   DIAGNOSIS_GROUPS,
+  COMPLICATION_TYPES,
+  COMPLICATION_LABELS,
+  ComplicationType,
   ASA_CLASSES,
   AGE_RANGES,
   GENDER_OPTIONS,
@@ -217,6 +220,7 @@ interface ORFormState {
   anesthesiaType: AnesthesiaTypeOR | "";
   hasComplication: boolean;
   complicationNote: string;
+  complicationTypes: ComplicationType[];
 
   // Optional
   postOpDiagnosis: string;
@@ -262,6 +266,7 @@ const INITIAL_STATE: ORFormState = {
   anesthesiaType: "",
   hasComplication: false,
   complicationNote: "",
+  complicationTypes: [],
   postOpDiagnosis: "",
   gender: "",
   ageRange: "",
@@ -398,6 +403,7 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
         anesthesiaType: (form.anesthesiaType || "GA") as AnesthesiaTypeOR,
         hasComplication: form.hasComplication,
         complicationNote: form.complicationNote,
+        ...(form.hasComplication && form.complicationTypes.length > 0 && { complicationTypes: form.complicationTypes }),
 
         // Optional
         ...(form.postOpDiagnosis && { postOpDiagnosis: form.postOpDiagnosis as any }),
@@ -708,14 +714,43 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
             />
 
             {form.hasComplication && (
-              <Field label="รายละเอียด Complication" required error={errors.complicationNote}>
-                <Textarea
-                  value={form.complicationNote}
-                  onChange={(v) => set("complicationNote", v)}
-                  placeholder="ระบุรายละเอียด..."
-                  rows={3}
-                />
-              </Field>
+              <>
+                <Field label="ประเภท Complication" hint="เลือกได้หลายข้อ">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {COMPLICATION_TYPES.map((type) => {
+                      const isChecked = form.complicationTypes.includes(type);
+                      return (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => {
+                            const newTypes = isChecked
+                              ? form.complicationTypes.filter((t) => t !== type)
+                              : [...form.complicationTypes, type];
+                            set("complicationTypes", newTypes);
+                          }}
+                          className={`text-left rounded-xl px-3 py-2.5 text-sm border transition-colors ${
+                            isChecked
+                              ? "bg-red-50 text-red-700 border-red-300"
+                              : "bg-white text-gray-600 border-gray-200 hover:border-red-200"
+                          }`}
+                        >
+                          <span className="mr-2">{isChecked ? "✓" : "○"}</span>
+                          {COMPLICATION_LABELS[type]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Field>
+                <Field label="รายละเอียดเพิ่มเติม" required error={errors.complicationNote}>
+                  <Textarea
+                    value={form.complicationNote}
+                    onChange={(v) => set("complicationNote", v)}
+                    placeholder="ระบุรายละเอียด..."
+                    rows={3}
+                  />
+                </Field>
+              </>
             )}
 
             <Toggle
