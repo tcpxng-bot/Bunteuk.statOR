@@ -82,6 +82,7 @@ export const DIAGNOSIS_GROUPS = [
   "CA corpus",
   "CA endometrium",
   "CA tube",
+  "POP",
 ] as const;
 export type DiagnosisGroup = (typeof DIAGNOSIS_GROUPS)[number];
 
@@ -106,7 +107,9 @@ export interface OperationDoc {
   year: number;
   mainGroup: MainGroup;
   urgency: Urgency;
-  procedureName: string; // จาก dropdown list
+  procedureName: string; // หัตถการที่ทำจริง (actual)
+  plannedProcedure?: string; // หัตถการที่วางแผนไว้จากหน่วยเปล
+  planChanged?: boolean; // auto: true ถ้า plannedProcedure != procedureName
   diagnosisGroup: DiagnosisGroup; // Pre-op
   surgeon: string; // จาก dropdown list
   startTime: Timestamp;
