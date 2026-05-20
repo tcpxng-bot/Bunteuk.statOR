@@ -5,7 +5,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/contexts/AuthContext";
-import { useTodayOperations, useTomorrowPreOpCases, useOperations } from "@/hooks/useOperations";
+import { useTodayOperations, useTodayPreOpCases, useTomorrowPreOpCases, useOperations } from "@/hooks/useOperations";
 import { OperationDoc, PreOpCaseDoc } from "@/types/database";
 import { deleteOperation } from "@/lib/firestore";
 
@@ -17,10 +17,12 @@ export default function DashboardPage() {
   const { userDoc, hasAnyRole } = useAuth();
   const router = useRouter();
   const { operations: todayOps, loading: todayLoading } = useTodayOperations();
+  const { cases: todayPreOpCases } = useTodayPreOpCases();
   const { cases: tomorrowCases, loading: tomorrowLoading } = useTomorrowPreOpCases();
   const now = new Date();
   const { operations: monthOps, loading: monthLoading } = useOperations({ year: now.getFullYear(), month: now.getMonth() + 1 });
   const canAddCase = hasAnyRole(["statistician", "super_admin"]);
+  const pendingTodayCases = todayPreOpCases.filter((c: any) => !c.operationId);
 
   const stats = useMemo(() => {
     if (!monthOps.length) return null;
@@ -60,13 +62,13 @@ export default function DashboardPage() {
           {(["today", "tomorrow"] as Tab[]).map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
               {tab === "today" ? "Today" : "Tomorrow"}
-              {tab === "today" && todayOps.length > 0 && <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-teal-100 px-1.5 text-xs font-mono text-teal-700">{todayOps.length}</span>}
+              {tab === "today" && (todayOps.length + pendingTodayCases.length) > 0 && <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-teal-100 px-1.5 text-xs font-mono text-teal-700">{todayOps.length + pendingTodayCases.length}</span>}
               {tab === "tomorrow" && tomorrowCases.length > 0 && <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-100 px-1.5 text-xs font-mono text-amber-700">{tomorrowCases.length}</span>}
             </button>
           ))}
         </div>
 
-        {activeTab === "today" ? <TodayTab operations={todayOps} loading={todayLoading} canEdit={canAddCase} /> : <TomorrowTab cases={tomorrowCases} loading={tomorrowLoading} canAdd={canAddCase} />}
+        {activeTab === "today" ? <TodayTab operations={todayOps} pendingCases={pendingTodayCases} loading={todayLoading} canEdit={canAddCase} /> : <TomorrowTab cases={tomorrowCases} loading={tomorrowLoading} canAdd={canAddCase} />}
 
         <div className="mt-10">
           <h2 className="text-base font-medium text-gray-900 mb-4">สถิติ {MONTHS_TH[now.getMonth()]} {now.getFullYear() + 543}</h2>
@@ -131,7 +133,7 @@ export default function DashboardPage() {
   );
 }
 
-function TodayTab({ operations, loading, canEdit }: { operations: OperationDoc[]; loading: boolean; canEdit: boolean }) {
+function TodayTab({ operations, pendingCases, loading, canEdit }: { operations: OperationDoc[]; pendingCases: any[]; loading: boolean; canEdit: boolean }) {
   const router = useRouter();
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -144,11 +146,39 @@ function TodayTab({ operations, loading, canEdit }: { operations: OperationDoc[]
   }
 
   if (loading) return <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" /></div>;
-  if (!operations.length) return <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center"><p className="text-sm text-gray-500">ไม่มีเคสวันนี้</p></div>;
+  if (!operations.length && !pendingCases.length) return <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center"><p className="text-sm text-gray-500">ไม่มีเคสวันนี้</p></div>;
 
   return (
     <>
       <div className="space-y-2">
+        {/* Pending cases (from หน่วยเปล, still no OR record) */}
+        {pendingCases.map((c) => (
+          <div key={c.id} className="flex items-center gap-3 rounded-2xl bg-amber-50/40 border border-amber-200 px-4 py-4 hover:border-amber-300 hover:shadow-sm transition-all">
+            <div className="h-10 w-1 rounded-full shrink-0 bg-amber-400" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium text-gray-900 truncate">{c.procedureName}</span>
+                <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700 font-medium">รอบันทึก OR</span>
+              </div>
+              <div className="flex items-center gap-2 mt-1 text-xs text-gray-400 flex-wrap">
+                <span>{c.surgeon}</span>
+                <span>·</span>
+                <span>HN-xxxx{c.hnLast3}</span>
+                {c.preOpDiagnosis && <><span>·</span><span>{c.preOpDiagnosis}</span></>}
+                {c.planConsultUro && <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">Plan Uro</span>}
+                {c.planConsultColo && <span className="bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded">Plan Colo</span>}
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {canEdit && (
+                <button onClick={() => router.push(`/operations/new?from=${c.id}`)} className="rounded-lg bg-teal-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-teal-700 transition-colors whitespace-nowrap">
+                  + OR
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+
         {operations.map((op) => (
           <div key={op.id} className="flex items-center gap-3 rounded-2xl bg-white border border-gray-100 px-4 py-4 hover:border-gray-200 hover:shadow-sm transition-all">
             <div className={`h-10 w-1 rounded-full shrink-0 ${op.urgency === "Emergency" ? "bg-amber-400" : op.urgency === "Elective" ? "bg-teal-400" : "bg-gray-300"}`} />
