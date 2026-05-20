@@ -30,6 +30,7 @@ export default function DashboardPage() {
     const elective = monthOps.filter((o) => o.urgency === "Elective").length;
     const emergency = monthOps.filter((o) => o.urgency === "Emergency").length;
     const complicated = monthOps.filter((o) => o.hasComplication).length;
+    const planChangedCount = monthOps.filter((o) => o.planChanged).length;
     const procMap = new Map<string, { elective: number; emergency: number; other: number }>();
     monthOps.forEach((op) => {
       const e = procMap.get(op.procedureName) || { elective: 0, emergency: 0, other: 0 };
@@ -39,7 +40,7 @@ export default function DashboardPage() {
     const topProcedures = [...procMap.entries()].map(([name, c]) => ({ name, ...c, total: c.elective + c.emergency + c.other })).sort((a, b) => b.total - a.total).slice(0, 5);
     const groupMap = new Map<string, number>();
     monthOps.forEach((op) => groupMap.set(op.mainGroup, (groupMap.get(op.mainGroup) || 0) + 1));
-    return { total, elective, emergency, electivePercent: Math.round((elective / total) * 100), emergencyPercent: Math.round((emergency / total) * 100), complicationRate: total > 0 ? ((complicated / total) * 100).toFixed(1) : "0", topProcedures, groups: [...groupMap.entries()].sort((a, b) => b[1] - a[1]) };
+    return { total, elective, emergency, electivePercent: Math.round((elective / total) * 100), emergencyPercent: Math.round((emergency / total) * 100), complicationRate: total > 0 ? ((complicated / total) * 100).toFixed(1) : "0", planChangedCount, topProcedures, groups: [...groupMap.entries()].sort((a, b) => b[1] - a[1]) };
   }, [monthOps]);
 
   return (
@@ -188,6 +189,7 @@ function TodayTab({ operations, pendingCases, loading, canEdit }: { operations: 
                 <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">{op.mainGroup}</span>
                 {op.status === "confirmed" && <span className="shrink-0 rounded-full bg-teal-50 px-2 py-0.5 text-[11px] text-teal-600">✓</span>}
                 {op.hasComplication && <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[11px] text-red-600">Complication</span>}
+                {op.planChanged && <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">🔄 เปลี่ยนแผน</span>}
               </div>
               <div className="flex items-center gap-2 mt-1 text-xs text-gray-400 flex-wrap">
                 <span>{op.surgeon || "—"}</span>
