@@ -147,6 +147,7 @@ interface ORFormState {
   postOpTransfer: "RR" | "ICU_NO_RR" | "ER_CONDITION_RR" | "HOME" | "UNPLANNED_ICU" | "";
   unplannedConsult: boolean;
   preOpCaseId: string;
+  plannedProcedure: string;
 }
 
 const INITIAL_STATE: ORFormState = {
@@ -177,6 +178,7 @@ const INITIAL_STATE: ORFormState = {
   postOpTransfer: "",
   unplannedConsult: false,
   preOpCaseId: "",
+  plannedProcedure: "",
 };
 
 function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
@@ -195,6 +197,7 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
       setForm((prev) => ({
         ...prev,
         procedureName: c.procedureName || prev.procedureName,
+        plannedProcedure: c.procedureName || "",
         surgeon: c.surgeon || prev.surgeon,
         diagnosisGroup: (c.preOpDiagnosis as any) || prev.diagnosisGroup,
         preOpCaseId: preOpId,
@@ -316,6 +319,8 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
         ...(form.postOpTransfer && { postOpTransfer: form.postOpTransfer as any }),
         unplannedConsult: form.unplannedConsult,
         ...(form.preOpCaseId && { preOpCaseId: form.preOpCaseId }),
+        ...(form.plannedProcedure && { plannedProcedure: form.plannedProcedure }),
+        ...(form.plannedProcedure && form.plannedProcedure !== form.procedureName && { planChanged: true }),
 
         createdBy: user?.uid || "",
         status,
@@ -409,7 +414,7 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
               />
             </Field>
 
-            <Field label="หัตถการ" required error={errors.procedureName}>
+            <Field label="หัตถการที่ทำจริง" required error={errors.procedureName} hint={form.plannedProcedure ? `วางแผน: ${form.plannedProcedure}` : undefined}>
               {form.mainGroup ? (
                 <InlineAddSelect
                   value={form.procedureName}
@@ -423,6 +428,11 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
                 <div className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400">
                   เลือก Main Group ก่อน
                 </div>
+              )}
+              {form.plannedProcedure && form.procedureName && form.plannedProcedure !== form.procedureName && (
+                <p className="mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 flex items-center gap-2">
+                  🔄 <span>เปลี่ยนแผนผ่าตัด: <span className="font-medium">{form.plannedProcedure}</span> → <span className="font-medium">{form.procedureName}</span></span>
+                </p>
               )}
             </Field>
           </Section>
