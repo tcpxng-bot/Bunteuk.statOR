@@ -116,15 +116,19 @@ export function CommitteeDashboard({ config }: CommitteeDashboardProps) {
                 <div className="space-y-2.5">
                   {config.manualIndicators
                     .filter((f) => f.type === "boolean")
-                    .map((field) => (
-                      <IndicatorRow
-                        key={field.key}
-                        label={field.label}
-                        count={summary.indicatorCounts[field.key] || 0}
-                        total={summary.total}
-                        tag="กรอกเอง"
-                      />
-                    ))}
+                    .map((field) => {
+                      const AUTO_KEYS = ["adjacentOrganInjury", "foreignBodyRetained", "woundInfection", "preventableIncident", "unplannedAdmission", "icuObserve"];
+                      const isAuto = AUTO_KEYS.includes(field.key);
+                      return (
+                        <IndicatorRow
+                          key={field.key}
+                          label={field.label}
+                          count={summary.indicatorCounts[field.key] || 0}
+                          total={summary.total}
+                          tag={isAuto ? "auto จาก OR" : "กรอกเอง"}
+                        />
+                      );
+                    })}
                   {config.rrIndicators
                     .filter((f) => f.type === "boolean")
                     .map((field) => (
