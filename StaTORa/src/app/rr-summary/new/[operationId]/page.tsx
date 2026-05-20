@@ -106,6 +106,9 @@ export default function RRFormPage() {
             painScoreVRS: rr.painScoreVRS,
             preOpPainScoreNRS: rr.preOpPainScoreNRS != null ? String(rr.preOpPainScoreNRS) : "",
           });
+        } else if (op) {
+          // Pre-fill anesthesia from operation
+          setForm((prev) => ({ ...prev, anesthesiaType: (op.anesthesiaType as any) || "" }));
         }
       } catch (err) {
         console.error(err);
@@ -208,14 +211,6 @@ export default function RRFormPage() {
                 value={form.postOpRoute}
                 onChange={(v) => set("postOpRoute", v)}
                 options={POST_OP_ROUTES}
-              />
-            </Field>
-
-            <Field label="Anesthesia Type" required>
-              <PillSelect
-                value={form.anesthesiaType}
-                onChange={(v) => set("anesthesiaType", v)}
-                options={ANESTHESIA_TYPES_RR.map((a) => ({ value: a, label: a }))}
               />
             </Field>
 
