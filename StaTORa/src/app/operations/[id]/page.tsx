@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { getOperation, updateOperation, getRRRecordByOperationId } from "@/lib/firestore";
-import { OperationDoc, RRRecordDoc } from "@/types/database";
+import { OperationDoc, RRRecordDoc, COMPLICATION_LABELS } from "@/types/database";
 import { useAuth } from "@/contexts/AuthContext";
 
 function formatDateTime(ts: any): string {
@@ -192,6 +192,15 @@ export default function OperationDetailPage() {
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
             <h2 className="font-medium text-gray-700 mb-3 text-sm">Complication</h2>
             <Row label="มี Complication" value={op.hasComplication ? "✓ มี" : "ไม่มี"} />
+            {op.hasComplication && op.complicationTypes && op.complicationTypes.length > 0 && (
+              <Row label="ประเภท" value={
+                <div className="flex flex-wrap gap-1.5 justify-end">
+                  {op.complicationTypes.map((t) => (
+                    <span key={t} className="bg-red-50 text-red-700 px-2 py-0.5 rounded text-xs">{COMPLICATION_LABELS[t]}</span>
+                  ))}
+                </div>
+              } />
+            )}
             {op.hasComplication && <Row label="หมายเหตุ" value={op.complicationNote} />}
           </div>
 
