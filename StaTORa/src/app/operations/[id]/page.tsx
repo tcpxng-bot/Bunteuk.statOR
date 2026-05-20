@@ -146,6 +146,7 @@ export default function OperationDetailPage() {
             <Row label="เพศ" value={op.gender} />
             <Row label="ช่วงอายุ" value={op.ageRange} />
             <Row label="ASA" value={op.asaClass} />
+            {op.hnLast3 && <Row label="HN" value={`HN-xxxx${op.hnLast3}`} />}
           </div>
 
           {/* Team */}
