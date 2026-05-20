@@ -90,6 +90,102 @@ function InlineAddSelect({
     </div>
   );
 }
+
+// ── Multi Inline Add Select ────────────────────
+function MultiInlineAddSelect({
+  values, onChange, items, placeholder, listName,
+}: {
+  values: string[];
+  onChange: (v: string[]) => void;
+  items: DropdownItem[];
+  placeholder: string;
+  listName: string;
+}) {
+  const [selecting, setSelecting] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [newVal, setNewVal] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function handleAddNew() {
+    const val = newVal.trim();
+    if (!val) return;
+    setSaving(true);
+    try {
+      const existing = await getDropdownList(listName);
+      const currentItems = existing?.items ?? [];
+      if (!currentItems.some((i) => i.value === val)) {
+        const newItem: DropdownItem = { value: val, label: val, isActive: true, sortOrder: currentItems.length };
+        await setDropdownList(listName, { listName, items: [...currentItems, newItem], updatedBy: "" });
+      }
+      if (!values.includes(val)) onChange([...values, val]);
+    } catch(e) { console.error(e); }
+    setNewVal("");
+    setAdding(false);
+    setSaving(false);
+  }
+
+  function handleSelect(val: string) {
+    if (val && !values.includes(val)) onChange([...values, val]);
+    setSelecting("");
+  }
+
+  function handleRemove(val: string) {
+    onChange(values.filter((v) => v !== val));
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* Selected items */}
+      {values.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {values.map((v) => (
+            <span key={v} className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 text-teal-700 px-2.5 py-1 text-xs">
+              {v}
+              <button type="button" onClick={() => handleRemove(v)} className="text-teal-500 hover:text-red-500">×</button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Add new mode */}
+      {adding ? (
+        <div className="flex gap-2">
+          <input
+            autoFocus
+            type="text"
+            value={newVal}
+            onChange={(e) => setNewVal(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddNew(); } if (e.key === "Escape") setAdding(false); }}
+            placeholder="พิมพ์แล้วกด Enter"
+            className="flex-1 rounded-lg border border-teal-400 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+          />
+          <button type="button" onClick={handleAddNew} disabled={saving} className="px-3 py-2 rounded-lg bg-teal-600 text-white text-sm disabled:opacity-50">{saving ? "..." : "เพิ่ม"}</button>
+          <button type="button" onClick={() => setAdding(false)} className="px-3 py-2 rounded-lg border border-gray-200 text-sm">ยกเลิก</button>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <select
+              value={selecting}
+              onChange={(e) => handleSelect(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+            >
+              <option value="">{placeholder}</option>
+              {items.filter((i) => !values.includes(i.value)).map((i) => <option key={i.value} value={i.value}>{i.label}</option>)}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="px-3 py-2 rounded-lg border border-gray-200 text-teal-600 text-sm hover:bg-teal-50 transition-colors whitespace-nowrap"
+          >
+            + เพิ่ม
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 import {
   MAIN_GROUPS,
   URGENCY_TYPES,
@@ -130,6 +226,9 @@ interface ORFormState {
   operatingRoom: string;
   scrubNurse: string;
   circulateNurse: string;
+  scrubNurses: string[];
+  circulateNurses: string[];
+  assistantSurgeons: string[];
 
   // OB/C/S specific
   ebl: string;
@@ -169,6 +268,9 @@ const INITIAL_STATE: ORFormState = {
   operatingRoom: "",
   scrubNurse: "",
   circulateNurse: "",
+  scrubNurses: [],
+  circulateNurses: [],
+  assistantSurgeons: [],
   ebl: "",
   gestationalAge: "",
   unplannedICU: false,
@@ -300,8 +402,9 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
         ...(form.ageRange && { ageRange: form.ageRange as AgeRange }),
         ...(form.asaClass && { asaClass: form.asaClass as ASAClass }),
         ...(form.operatingRoom && { operatingRoom: form.operatingRoom }),
-        ...(form.scrubNurse && { scrubNurse: form.scrubNurse }),
-        ...(form.circulateNurse && { circulateNurse: form.circulateNurse }),
+        ...(form.scrubNurses.length > 0 && { scrubNurse: form.scrubNurses[0], scrubNurses: form.scrubNurses }),
+        ...(form.circulateNurses.length > 0 && { circulateNurse: form.circulateNurses[0], circulateNurses: form.circulateNurses }),
+        ...(form.assistantSurgeons.length > 0 && { assistantSurgeons: form.assistantSurgeons }),
 
         // OB
         ...(isOB && form.ebl && { ebl: parseInt(form.ebl) }),
@@ -506,23 +609,33 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
               />
             </Field>
 
+            <Field label="ทีมแพทย์" hint="แพทย์ที่ร่วมผ่าตัด (เพิ่มได้หลายคน)">
+              <MultiInlineAddSelect
+                values={form.assistantSurgeons}
+                onChange={(v) => set("assistantSurgeons", v)}
+                items={surgeons.filter((s) => s.value !== form.surgeon)}
+                placeholder="+ เพิ่มแพทย์ร่วมผ่าตัด"
+                listName="surgeons"
+              />
+            </Field>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Scrub Nurse">
-                <InlineAddSelect
-                  value={form.scrubNurse}
-                  onChange={(v) => set("scrubNurse", v)}
+              <Field label="Scrub Nurse" hint="เพิ่มได้หลายคน (กรณีมีการเปลี่ยนกะ)">
+                <MultiInlineAddSelect
+                  values={form.scrubNurses}
+                  onChange={(v) => set("scrubNurses", v)}
                   items={scrubNurses}
-                  placeholder="เลือก Scrub Nurse"
+                  placeholder="+ เพิ่ม Scrub Nurse"
                   listName="scrubNurses"
                 />
               </Field>
 
-              <Field label="Circulate Nurse">
-                <InlineAddSelect
-                  value={form.circulateNurse}
-                  onChange={(v) => set("circulateNurse", v)}
+              <Field label="Circulate Nurse" hint="เพิ่มได้หลายคน">
+                <MultiInlineAddSelect
+                  values={form.circulateNurses}
+                  onChange={(v) => set("circulateNurses", v)}
                   items={circulateNurses}
-                  placeholder="เลือก Circulate Nurse"
+                  placeholder="+ เพิ่ม Circulate Nurse"
                   listName="circulateNurses"
                 />
               </Field>
