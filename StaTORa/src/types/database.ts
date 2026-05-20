@@ -125,8 +125,11 @@ export interface OperationDoc {
   ageRange?: AgeRange;
   asaClass?: ASAClass;
   operatingRoom?: string; // OR1, OR2, ...
-  scrubNurse?: string;
+  scrubNurse?: string; // คนแรก (สำหรับ backward compatibility)
+  scrubNurses?: string[]; // หลายคน
   circulateNurse?: string;
+  circulateNurses?: string[]; // หลายคน
+  assistantSurgeons?: string[]; // ทีมแพทย์ที่ร่วมผ่าตัด
 
   // ── Post-op transfer ──
   postOpTransfer?: "RR" | "ICU_NO_RR" | "ER_CONDITION_RR" | "HOME" | "UNPLANNED_ICU";
