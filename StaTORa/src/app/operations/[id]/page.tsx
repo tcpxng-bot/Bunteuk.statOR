@@ -4,8 +4,8 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
-import { getOperation, updateOperation } from "@/lib/firestore";
-import { OperationDoc } from "@/types/database";
+import { getOperation, updateOperation, getRRRecordByOperationId } from "@/lib/firestore";
+import { OperationDoc, RRRecordDoc } from "@/types/database";
 import { useAuth } from "@/contexts/AuthContext";
 
 function formatDateTime(ts: any): string {
@@ -39,11 +39,13 @@ export default function OperationDetailPage() {
   const [op, setOp] = useState<OperationDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
+  const [rr, setRr] = useState<RRRecordDoc | null>(null);
 
   useEffect(() => {
     if (!id) return;
-    getOperation(id).then((data) => {
-      setOp(data);
+    Promise.all([getOperation(id), getRRRecordByOperationId(id)]).then(([opData, rrData]) => {
+      setOp(opData);
+      setRr(rrData);
       setLoading(false);
     });
   }, [id]);
@@ -114,7 +116,15 @@ export default function OperationDetailPage() {
                 "bg-gray-100 text-gray-600"
               }`}>{op.urgency}</span>
             } />
-            <Row label="หัตถการ" value={op.procedureName} />
+            <Row label="หัตถการ" value={
+              <div>
+                <span>{op.procedureName}</span>
+                {op.planChanged && <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">🔄 เปลี่ยนแผน</span>}
+              </div>
+            } />
+            {op.plannedProcedure && op.plannedProcedure !== op.procedureName && (
+              <Row label="วางแผนไว้" value={<span className="text-gray-500 line-through">{op.plannedProcedure}</span>} />
+            )}
             <Row label="แพทย์ผู้ผ่าตัด" value={op.surgeon} />
             <Row label="Pre-op Diagnosis" value={op.diagnosisGroup} />
             <Row label="Post-op Diagnosis" value={op.postOpDiagnosis} />
@@ -180,6 +190,33 @@ export default function OperationDetailPage() {
               {op.unplannedAdmission !== undefined && <Row label="Unplanned Admission" value={op.unplannedAdmission ? "✓ ใช่" : "ไม่มี"} />}
             </div>
           )}
+
+          {/* RR Record */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-medium text-gray-700 text-sm">ข้อมูล RR</h2>
+              <button
+                onClick={() => router.push(`/rr-summary/new/${op.id}`)}
+                className="text-xs text-teal-600 hover:underline"
+              >
+                {rr ? "แก้ไข RR →" : "+ บันทึก RR"}
+              </button>
+            </div>
+            {rr ? (
+              <>
+                <Row label="เส้นทาง" value={rr.postOpRoute} />
+                <Row label="Anesthesia (RR)" value={rr.anesthesiaType} />
+                <Row label="Patient Level" value={rr.patientLevel} />
+                <Row label="Pain Score NRS" value={rr.painScoreNRS !== undefined ? `${rr.painScoreNRS}/10` : undefined} />
+                <Row label="Pain Score VRS" value={rr.painScoreVRS} />
+                {rr.hasChill && <Row label="ภาวะหนาวสั่น" value="✓ มี" />}
+                {rr.hasHypothermia && <Row label="อุณหภูมิต่ำ" value="✓ มี" />}
+                {rr.hasHypoxia && <Row label="Hypoxia" value="✓ มี" />}
+              </>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-3">ยังไม่มีข้อมูล RR</p>
+            )}
+          </div>
 
           {/* Metadata */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
