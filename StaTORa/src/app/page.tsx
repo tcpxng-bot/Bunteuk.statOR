@@ -193,6 +193,7 @@ function TodayTab({ operations, pendingCases, loading, canEdit }: { operations: 
               </div>
               <div className="flex items-center gap-2 mt-1 text-xs text-gray-400 flex-wrap">
                 <span>{op.surgeon || "—"}</span>
+                {op.hnLast3 && <><span>·</span><span>HN-xxxx{op.hnLast3}</span></>}
                 {op.durationMinutes > 0 && <><span>·</span><span>{op.durationMinutes} min</span></>}
                 {op.operatingRoom && <><span>·</span><span>{op.operatingRoom}</span></>}
                 {op.postOpTransfer && <><span>·</span><span className="text-blue-500">{op.postOpTransfer}</span></>}
