@@ -247,6 +247,7 @@ interface ORFormState {
   unplannedConsult: boolean;
   preOpCaseId: string;
   plannedProcedure: string;
+  hnLast3: string;
 }
 
 const INITIAL_STATE: ORFormState = {
@@ -281,6 +282,7 @@ const INITIAL_STATE: ORFormState = {
   unplannedConsult: false,
   preOpCaseId: "",
   plannedProcedure: "",
+  hnLast3: "",
 };
 
 function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
@@ -303,6 +305,7 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
         surgeon: c.surgeon || prev.surgeon,
         diagnosisGroup: (c.preOpDiagnosis as any) || prev.diagnosisGroup,
         preOpCaseId: preOpId,
+        hnLast3: c.hnLast3 || "",
       }));
     });
   }, [preOpId]);
@@ -424,6 +427,7 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
         ...(form.preOpCaseId && { preOpCaseId: form.preOpCaseId }),
         ...(form.plannedProcedure && { plannedProcedure: form.plannedProcedure }),
         ...(form.plannedProcedure && form.plannedProcedure !== form.procedureName && { planChanged: true }),
+        ...(form.hnLast3 && { hnLast3: form.hnLast3 }),
 
         createdBy: user?.uid || "",
         status,
@@ -595,6 +599,14 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
                     { value: "", label: "—" },
                     ...ASA_CLASSES.map((a) => ({ value: a, label: `ASA ${a}` })),
                   ]}
+                />
+              </Field>
+
+              <Field label="HN (3 หลักท้าย)" hint="เช่น 097">
+                <TextInput
+                  value={form.hnLast3}
+                  onChange={(v) => set("hnLast3", v.replace(/[^0-9]/g, "").slice(0, 4))}
+                  placeholder="เช่น 097"
                 />
               </Field>
             </div>
