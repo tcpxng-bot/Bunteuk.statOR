@@ -118,6 +118,18 @@ export default function EditOperationPage() {
   }, [operationId]);
 
   const { procedures } = useProceduresByMainGroup((form?.mainGroup as MainGroup) || null);
+
+  // ถ้า procedureName เดิมไม่อยู่ใน dropdown ให้เพิ่มเข้าไปชั่วคราว
+  const proceduresWithCurrent = useMemo(() => {
+    if (!form?.procedureName) return procedures;
+    const exists = procedures.some((p) => p.value === form.procedureName);
+    if (exists) return procedures;
+    return [
+      { value: form.procedureName, label: form.procedureName, isActive: true, sortOrder: -1 },
+      ...procedures,
+    ];
+  }, [procedures, form?.procedureName]);
+
   const { items: surgeons } = useDropdownList("surgeons");
   const { items: scrubNurses } = useDropdownList("scrubNurses");
   const { items: circulateNurses } = useDropdownList("circulateNurses");
@@ -269,7 +281,7 @@ export default function EditOperationPage() {
               <PillSelect value={form.urgency} onChange={(v) => set("urgency", v as Urgency)} options={URGENCY_TYPES.map((u) => ({ value: u, label: u }))} />
             </Field>
             <Field label="หัตถการ" required error={errors.procedureName}>
-              <Select value={form.procedureName} onChange={(v) => set("procedureName", v)} options={procedures.map((p) => ({ value: p.value, label: p.label }))} placeholder={form.mainGroup ? "เลือกหัตถการ" : "เลือก Main Group ก่อน"} disabled={!form.mainGroup} />
+              <Select value={form.procedureName} onChange={(v) => set("procedureName", v)} options={proceduresWithCurrent.map((p) => ({ value: p.value, label: p.label }))} placeholder={form.mainGroup ? "เลือกหัตถการ" : "เลือก Main Group ก่อน"} disabled={!form.mainGroup} />
             </Field>
           </Section>
 
