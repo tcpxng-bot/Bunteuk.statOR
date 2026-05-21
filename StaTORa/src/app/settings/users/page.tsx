@@ -18,6 +18,7 @@ const ROLE_LABELS: Record<Role, string> = {
   committee_rh: "กก. RH",
   committee_cs: "กก. C/S",
   committee_ca_cervix: "กก. CA Cervix",
+  committee_ovarian_tumor: "กก. Ovarian Tumor",
   committee_pop: "กก. POP",
 };
 
