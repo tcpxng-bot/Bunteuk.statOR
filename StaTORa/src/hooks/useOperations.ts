@@ -12,7 +12,7 @@ import {
   QueryConstraint,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { OperationDoc, MainGroup } from "@/types/database";
+import { OperationDoc, PreOpCaseDoc, MainGroup } from "@/types/database";
 
 interface UseOperationsOptions {
   date?: Date;
@@ -73,7 +73,7 @@ export function useTodayOperations() {
 }
 
 export function useTomorrowPreOpCases() {
-  const [cases, setCases] = useState<any[]>([]);
+  const [cases, setCases] = useState<PreOpCaseDoc[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -92,35 +92,7 @@ export function useTomorrowPreOpCases() {
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      setCases(snap.docs.map((d) => d.data()));
-      setLoading(false);
-    });
-
-    return () => unsub();
-  }, []);
-
-  return { cases, loading };
-}
-
-export function useTodayPreOpCases() {
-  const [cases, setCases] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
-
-    const q = query(
-      collection(db, "preOpCases"),
-      where("operationDate", ">=", Timestamp.fromDate(start)),
-      where("operationDate", "<=", Timestamp.fromDate(end)),
-      orderBy("operationDate", "asc")
-    );
-
-    const unsub = onSnapshot(q, (snap) => {
-      setCases(snap.docs.map((d) => d.data()));
+      setCases(snap.docs.map((d) => ({ id: d.id, ...d.data() } as PreOpCaseDoc)));
       setLoading(false);
     });
 
