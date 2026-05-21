@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTodayOperations, useTomorrowPreOpCases, useOperations } from "@/hooks/useOperations";
@@ -12,7 +13,8 @@ type Tab = "today" | "tomorrow";
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<Tab>("today");
-  const { userDoc } = useAuth();
+  const { userDoc, hasRole } = useAuth();
+  const router = useRouter();
   const { operations: todayOps, loading: todayLoading } = useTodayOperations();
   const { cases: tomorrowCases, loading: tomorrowLoading } = useTomorrowPreOpCases();
   const { pendingORCount, pendingRRCount, pendingORCases, loading: pendingLoading } = usePendingCases();
@@ -112,7 +114,7 @@ export default function DashboardPage() {
         </div>
 
         {activeTab === "today" ? (
-          <TodayTab operations={todayOps} loading={todayLoading} pendingCases={pendingORCases} pendingLoading={pendingLoading} pendingRRCount={pendingRRCount} />
+          <TodayTab operations={todayOps} loading={todayLoading} pendingCases={pendingORCases} pendingLoading={pendingLoading} pendingRRCount={pendingRRCount} onOpenORForm={(id) => router.push(`/operations/new?preOpCaseId=${id}`)} canFillOR={hasRole("statistician") || hasRole("super_admin")} />
         ) : (
           <TomorrowTab cases={tomorrowCases} loading={tomorrowLoading} />
         )}
@@ -202,12 +204,16 @@ function TodayTab({
   pendingCases,
   pendingLoading,
   pendingRRCount,
+  onOpenORForm,
+  canFillOR,
 }: {
   operations: OperationDoc[];
   loading: boolean;
   pendingCases: PreOpCaseDoc[];
   pendingLoading: boolean;
   pendingRRCount: number;
+  onOpenORForm: (preOpCaseId: string) => void;
+  canFillOR: boolean;
 }) {
   if (loading || pendingLoading) return <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-3 border-teal-500 border-t-transparent" /></div>;
 
@@ -235,7 +241,11 @@ function TodayTab({
           {pendingCases.length > 0 && (
             <div className="mt-3 space-y-2">
               {pendingCases.map((c) => (
-                <div key={c.id} className="flex items-center gap-3 rounded-xl bg-white border border-orange-100 px-4 py-3">
+                <div
+                  key={c.id}
+                  onClick={() => canFillOR && onOpenORForm(c.id)}
+                  className={`flex items-center gap-3 rounded-xl bg-white border border-orange-100 px-4 py-3 transition-all ${canFillOR ? "cursor-pointer hover:border-orange-300 hover:shadow-sm" : ""}`}
+                >
                   <div className="h-8 w-1 rounded-full bg-orange-300 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-gray-900 truncate">{c.procedureName}</div>
@@ -245,7 +255,12 @@ function TodayTab({
                       <span>HN-xxxx{c.hnLast3}</span>
                     </div>
                   </div>
-                  <span className="shrink-0 rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-700">รอกรอก OR</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="shrink-0 rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-700">รอกรอก OR</span>
+                    {canFillOR && (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-400 shrink-0"><polyline points="9 18 15 12 9 6" /></svg>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
