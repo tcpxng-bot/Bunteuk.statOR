@@ -2,79 +2,131 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/contexts/AuthContext";
-import { useTodayOperations, useTodayPreOpCases, useTomorrowPreOpCases, useOperations } from "@/hooks/useOperations";
+import { useTodayOperations, useTomorrowPreOpCases, useOperations } from "@/hooks/useOperations";
+import { usePendingCases } from "@/hooks/usePendingCases";
 import { OperationDoc, PreOpCaseDoc } from "@/types/database";
-import { deleteOperation } from "@/lib/firestore";
 
 type Tab = "today" | "tomorrow";
-const MONTHS_TH = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<Tab>("today");
-  const { userDoc, hasAnyRole } = useAuth();
-  const router = useRouter();
+  const { userDoc } = useAuth();
   const { operations: todayOps, loading: todayLoading } = useTodayOperations();
-  const { cases: todayPreOpCases } = useTodayPreOpCases();
   const { cases: tomorrowCases, loading: tomorrowLoading } = useTomorrowPreOpCases();
+  const { pendingORCount, pendingRRCount, pendingORCases, loading: pendingLoading } = usePendingCases();
+
   const now = new Date();
-  const { operations: monthOps, loading: monthLoading } = useOperations({ year: now.getFullYear(), month: now.getMonth() + 1 });
-  const canAddCase = hasAnyRole(["statistician", "super_admin"]);
-  const pendingTodayCases = todayPreOpCases.filter((c: any) => !c.operationId);
+  const { operations: monthOps, loading: monthLoading } = useOperations({
+    year: now.getFullYear(),
+    month: now.getMonth() + 1,
+  });
 
   const stats = useMemo(() => {
-    if (!monthOps.length) return null;
+    if (monthOps.length === 0) return null;
+
     const total = monthOps.length;
     const elective = monthOps.filter((o) => o.urgency === "Elective").length;
     const emergency = monthOps.filter((o) => o.urgency === "Emergency").length;
     const complicated = monthOps.filter((o) => o.hasComplication).length;
-    const planChangedCount = monthOps.filter((o) => o.planChanged).length;
+
     const procMap = new Map<string, { elective: number; emergency: number; other: number }>();
     monthOps.forEach((op) => {
-      const e = procMap.get(op.procedureName) || { elective: 0, emergency: 0, other: 0 };
-      if (op.urgency === "Elective") e.elective++; else if (op.urgency === "Emergency") e.emergency++; else e.other++;
-      procMap.set(op.procedureName, e);
+      const existing = procMap.get(op.procedureName) || { elective: 0, emergency: 0, other: 0 };
+      if (op.urgency === "Elective") existing.elective++;
+      else if (op.urgency === "Emergency") existing.emergency++;
+      else existing.other++;
+      procMap.set(op.procedureName, existing);
     });
-    const topProcedures = [...procMap.entries()].map(([name, c]) => ({ name, ...c, total: c.elective + c.emergency + c.other })).sort((a, b) => b.total - a.total).slice(0, 5);
+    const topProcedures = [...procMap.entries()]
+      .map(([name, counts]) => ({ name, ...counts, total: counts.elective + counts.emergency + counts.other }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+
     const groupMap = new Map<string, number>();
-    monthOps.forEach((op) => groupMap.set(op.mainGroup, (groupMap.get(op.mainGroup) || 0) + 1));
-    return { total, elective, emergency, electivePercent: Math.round((elective / total) * 100), emergencyPercent: Math.round((emergency / total) * 100), complicationRate: total > 0 ? ((complicated / total) * 100).toFixed(1) : "0", planChangedCount, topProcedures, groups: [...groupMap.entries()].sort((a, b) => b[1] - a[1]) };
+    monthOps.forEach((op) => {
+      groupMap.set(op.mainGroup, (groupMap.get(op.mainGroup) || 0) + 1);
+    });
+
+    return {
+      total,
+      elective,
+      emergency,
+      electivePercent: Math.round((elective / total) * 100),
+      emergencyPercent: Math.round((emergency / total) * 100),
+      complicationRate: total > 0 ? ((complicated / total) * 100).toFixed(1) : "0",
+      topProcedures,
+      groups: [...groupMap.entries()].sort((a, b) => b[1] - a[1]),
+    };
   }, [monthOps]);
+
+  const MONTHS_TH = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
   return (
     <AppShell>
       <div className="px-4 lg:px-8 py-6 lg:py-8 max-w-6xl">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-xl lg:text-2xl font-medium text-gray-900 tracking-tight">สวัสดี, {userDoc?.displayName?.split(" ")[0]}</h1>
-            <p className="text-sm text-gray-400 mt-1">{now.toLocaleDateString("th-TH", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
-          </div>
-          {canAddCase && (
-            <button onClick={() => router.push("/operations/new")} className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700 transition-colors shadow-sm">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              เพิ่มเคส
-            </button>
-          )}
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-xl lg:text-2xl font-medium text-gray-900 tracking-tight">
+            สวัสดี, {userDoc?.displayName?.split(" ")[0]}
+          </h1>
+          <p className="text-sm text-gray-400 mt-1">
+            {now.toLocaleDateString("th-TH", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+          </p>
         </div>
 
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit mb-4">
-          {(["today", "tomorrow"] as Tab[]).map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-              {tab === "today" ? "Today" : "Tomorrow"}
-              {tab === "today" && (todayOps.length + pendingTodayCases.length) > 0 && <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-teal-100 px-1.5 text-xs font-mono text-teal-700">{todayOps.length + pendingTodayCases.length}</span>}
-              {tab === "tomorrow" && tomorrowCases.length > 0 && <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-100 px-1.5 text-xs font-mono text-amber-700">{tomorrowCases.length}</span>}
-            </button>
-          ))}
+        {/* Today / Tomorrow tabs */}
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit mb-6">
+          <button
+            onClick={() => setActiveTab("today")}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === "today" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Today
+            {todayOps.length > 0 && (
+              <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-teal-100 px-1.5 text-xs font-mono text-teal-700">
+                {todayOps.length}
+              </span>
+            )}
+            {pendingORCount > 0 && (
+              <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-100 px-1.5 text-xs font-mono text-orange-700">
+                {pendingORCount} รอกรอก
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("tomorrow")}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === "tomorrow" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Tomorrow
+            {tomorrowCases.length > 0 && (
+              <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-100 px-1.5 text-xs font-mono text-amber-700">
+                {tomorrowCases.length}
+              </span>
+            )}
+          </button>
         </div>
 
-        {activeTab === "today" ? <TodayTab operations={todayOps} pendingCases={pendingTodayCases} loading={todayLoading} canEdit={canAddCase} /> : <TomorrowTab cases={tomorrowCases} loading={tomorrowLoading} canAdd={canAddCase} />}
+        {activeTab === "today" ? (
+          <TodayTab operations={todayOps} loading={todayLoading} pendingCases={pendingORCases} pendingLoading={pendingLoading} pendingRRCount={pendingRRCount} />
+        ) : (
+          <TomorrowTab cases={tomorrowCases} loading={tomorrowLoading} />
+        )}
 
+        {/* Monthly summary */}
         <div className="mt-10">
-          <h2 className="text-base font-medium text-gray-900 mb-4">สถิติ {MONTHS_TH[now.getMonth()]} {now.getFullYear() + 543}</h2>
+          <h2 className="text-base font-medium text-gray-900 mb-4">
+            สถิติ {MONTHS_TH[now.getMonth()]} {now.getFullYear() + 543}
+          </h2>
+
           {monthLoading ? (
-            <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" /></div>
+            <div className="flex justify-center py-8">
+              <div className="h-6 w-6 animate-spin rounded-full border-3 border-teal-500 border-t-transparent" />
+            </div>
           ) : stats ? (
             <>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
@@ -83,6 +135,7 @@ export default function DashboardPage() {
                 <StatCard label="Emergency" value={stats.emergency} sub={`${stats.emergencyPercent}%`} color="amber" />
                 <StatCard label="Complication" value={`${stats.complicationRate}%`} color="red" />
               </div>
+
               {stats.topProcedures.length > 0 && (
                 <div className="rounded-2xl bg-white border border-gray-100 p-5 mb-6">
                   <h3 className="text-sm font-medium text-gray-700 mb-4">Top 5 หัตถการ</h3>
@@ -96,9 +149,15 @@ export default function DashboardPage() {
                             <span className="text-sm font-mono text-gray-500">{proc.total}</span>
                           </div>
                           <div className="flex h-6 rounded-lg overflow-hidden bg-gray-50">
-                            {proc.elective > 0 && <div className="bg-teal-400" style={{ width: `${(proc.elective / maxTotal) * 100}%` }} />}
-                            {proc.emergency > 0 && <div className="bg-amber-400" style={{ width: `${(proc.emergency / maxTotal) * 100}%` }} />}
-                            {proc.other > 0 && <div className="bg-gray-300" style={{ width: `${(proc.other / maxTotal) * 100}%` }} />}
+                            {proc.elective > 0 && (
+                              <div className="bg-teal-400 transition-all" style={{ width: `${(proc.elective / maxTotal) * 100}%` }} title={`Elective: ${proc.elective}`} />
+                            )}
+                            {proc.emergency > 0 && (
+                              <div className="bg-amber-400 transition-all" style={{ width: `${(proc.emergency / maxTotal) * 100}%` }} title={`Emergency: ${proc.emergency}`} />
+                            )}
+                            {proc.other > 0 && (
+                              <div className="bg-gray-300 transition-all" style={{ width: `${(proc.other / maxTotal) * 100}%` }} title={`Other: ${proc.other}`} />
+                            )}
                           </div>
                         </div>
                       );
@@ -111,6 +170,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )}
+
               {stats.groups.length > 0 && (
                 <div className="rounded-2xl bg-white border border-gray-100 p-5">
                   <h3 className="text-sm font-medium text-gray-700 mb-4">แยกตาม Main Group</h3>
@@ -126,7 +186,9 @@ export default function DashboardPage() {
               )}
             </>
           ) : (
-            <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center text-sm text-gray-400">ยังไม่มีข้อมูลเดือนนี้</div>
+            <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center text-sm text-gray-400">
+              ยังไม่มีข้อมูลเดือนนี้
+            </div>
           )}
         </div>
       </div>
@@ -134,131 +196,123 @@ export default function DashboardPage() {
   );
 }
 
-function TodayTab({ operations, pendingCases, loading, canEdit }: { operations: OperationDoc[]; pendingCases: any[]; loading: boolean; canEdit: boolean }) {
-  const router = useRouter();
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+function TodayTab({
+  operations,
+  loading,
+  pendingCases,
+  pendingLoading,
+  pendingRRCount,
+}: {
+  operations: OperationDoc[];
+  loading: boolean;
+  pendingCases: PreOpCaseDoc[];
+  pendingLoading: boolean;
+  pendingRRCount: number;
+}) {
+  if (loading || pendingLoading) return <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-3 border-teal-500 border-t-transparent" /></div>;
 
-  async function handleDelete(id: string) {
-    setDeleting(id);
-    await deleteOperation(id);
-    setDeleting(null);
-    setConfirmDelete(null);
-  }
-
-  if (loading) return <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" /></div>;
-  if (!operations.length && !pendingCases.length) return <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center"><p className="text-sm text-gray-500">ไม่มีเคสวันนี้</p></div>;
+  const hasPending = pendingCases.length > 0 || pendingRRCount > 0;
 
   return (
-    <>
-      <div className="space-y-2">
-        {/* Pending cases (from หน่วยเปล, still no OR record) */}
-        {pendingCases.map((c) => (
-          <div key={c.id} className="flex items-center gap-3 rounded-2xl bg-amber-50/40 border border-amber-200 px-4 py-4 hover:border-amber-300 hover:shadow-sm transition-all">
-            <div className="h-10 w-1 rounded-full shrink-0 bg-amber-400" />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-gray-900 truncate">{c.procedureName}</span>
-                <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700 font-medium">รอบันทึก OR</span>
-              </div>
-              <div className="flex items-center gap-2 mt-1 text-xs text-gray-400 flex-wrap">
-                <span>{c.surgeon}</span>
-                <span>·</span>
-                <span>HN-xxxx{c.hnLast3}</span>
-                {c.preOpDiagnosis && <><span>·</span><span>{c.preOpDiagnosis}</span></>}
-                {c.planConsultUro && <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">Plan Uro</span>}
-                {c.planConsultColo && <span className="bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded">Plan Colo</span>}
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {canEdit && (
-                <button onClick={() => router.push(`/operations/new?from=${c.id}`)} className="rounded-lg bg-teal-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-teal-700 transition-colors whitespace-nowrap">
-                  + OR
-                </button>
-              )}
-            </div>
+    <div className="space-y-4">
+      {/* Pending alert banner */}
+      {hasPending && (
+        <div className="rounded-2xl bg-orange-50 border border-orange-100 px-5 py-4">
+          <p className="text-sm font-medium text-orange-800 mb-2">เคสที่ยังรอกรอกข้อมูล</p>
+          <div className="flex gap-3">
+            {pendingCases.length > 0 && (
+              <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700">
+                รอกรอก OR form {pendingCases.length} เคส
+              </span>
+            )}
+            {pendingRRCount > 0 && (
+              <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-medium text-yellow-700">
+                รอกรอก RR form {pendingRRCount} เคส
+              </span>
+            )}
           </div>
-        ))}
-
-        {operations.map((op) => (
-          <div key={op.id} className="flex items-center gap-3 rounded-2xl bg-white border border-gray-100 px-4 py-4 hover:border-gray-200 hover:shadow-sm transition-all">
-            <div className={`h-10 w-1 rounded-full shrink-0 ${op.urgency === "Emergency" ? "bg-amber-400" : op.urgency === "Elective" ? "bg-teal-400" : "bg-gray-300"}`} />
-            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => router.push(`/operations/${op.id}`)}>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-gray-900 truncate">{op.procedureName}</span>
-                <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">{op.mainGroup}</span>
-                {op.status === "confirmed" && <span className="shrink-0 rounded-full bg-teal-50 px-2 py-0.5 text-[11px] text-teal-600">✓</span>}
-                {op.hasComplication && <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[11px] text-red-600">Complication</span>}
-                {op.planChanged && <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">🔄 เปลี่ยนแผน</span>}
-              </div>
-              <div className="flex items-center gap-2 mt-1 text-xs text-gray-400 flex-wrap">
-                <span>{op.surgeon || "—"}</span>
-                {op.hnLast3 && <><span>·</span><span>HN-xxxx{op.hnLast3}</span></>}
-                {op.durationMinutes > 0 && <><span>·</span><span>{op.durationMinutes} min</span></>}
-                {op.operatingRoom && <><span>·</span><span>{op.operatingRoom}</span></>}
-                {op.postOpTransfer && <><span>·</span><span className="text-blue-500">{op.postOpTransfer}</span></>}
-              </div>
+          {/* Pending OR cases list */}
+          {pendingCases.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {pendingCases.map((c) => (
+                <div key={c.id} className="flex items-center gap-3 rounded-xl bg-white border border-orange-100 px-4 py-3">
+                  <div className="h-8 w-1 rounded-full bg-orange-300 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900 truncate">{c.procedureName}</div>
+                    <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
+                      <span>{c.surgeon}</span>
+                      <span>·</span>
+                      <span>HN-xxxx{c.hnLast3}</span>
+                    </div>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-700">รอกรอก OR</span>
+                </div>
+              ))}
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button onClick={() => router.push(`/rr-summary/new/${op.id}`)} className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-[11px] font-medium text-blue-600 hover:bg-blue-100 transition-colors whitespace-nowrap">
-                RR
-              </button>
-              {canEdit && (
-                <button onClick={() => setConfirmDelete(op.id)} className="rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-400 transition-colors">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-      {confirmDelete && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
-            <h3 className="font-medium text-gray-900 mb-2">ลบเคสนี้?</h3>
-            <p className="text-sm text-gray-500 mb-4">ข้อมูลจะถูกลบถาวร ไม่สามารถกู้คืนได้</p>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmDelete(null)} className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm text-gray-600">ยกเลิก</button>
-              <button onClick={() => handleDelete(confirmDelete)} disabled={!!deleting} className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm text-white hover:bg-red-600 disabled:opacity-50">{deleting ? "กำลังลบ..." : "ลบเลย"}</button>
-            </div>
-          </div>
+          )}
         </div>
       )}
-    </>
+
+      {/* Completed today cases */}
+      {operations.length === 0 && !hasPending && (
+        <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center">
+          <p className="text-sm text-gray-500">ไม่มีเคสวันนี้</p>
+        </div>
+      )}
+      {operations.length > 0 && (
+        <div className="space-y-2">
+          {operations.map((op) => (
+            <div key={op.id} className="flex items-center gap-4 rounded-2xl bg-white border border-gray-100 px-5 py-4 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer">
+              <div className={`h-10 w-1 rounded-full shrink-0 ${op.urgency === "Emergency" ? "bg-amber-400" : op.urgency === "Elective" ? "bg-teal-400" : "bg-gray-300"}`} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-900 truncate">{op.procedureName}</span>
+                  <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">{op.mainGroup}</span>
+                  {op.caseStatus === "pending_rr" && (
+                    <span className="shrink-0 rounded-full bg-yellow-50 px-2 py-0.5 text-[11px] font-medium text-yellow-700">รอกรอก RR</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
+                  <span>{op.surgeon}</span>
+                  <span>·</span>
+                  <span className="font-mono">{op.durationMinutes} min</span>
+                  {op.operatingRoom && <><span>·</span><span>{op.operatingRoom}</span></>}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {op.hasComplication && <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] text-red-600 font-medium">Complication</span>}
+                {op.isPPH && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700 font-medium">PPH</span>}
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-300 shrink-0"><polyline points="9 18 15 12 9 6" /></svg>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
-function TomorrowTab({ cases, loading, canAdd }: { cases: PreOpCaseDoc[]; loading: boolean; canAdd: boolean }) {
-  const router = useRouter();
-  if (loading) return <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" /></div>;
-  if (!cases.length) return <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center"><p className="text-sm text-gray-500">ยังไม่มีเคสพรุ่งนี้</p></div>;
+function TomorrowTab({ cases, loading }: { cases: PreOpCaseDoc[]; loading: boolean }) {
+  if (loading) return <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-3 border-teal-500 border-t-transparent" /></div>;
+  if (cases.length === 0) return <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center"><p className="text-sm text-gray-500">ยังไม่มีเคสพรุ่งนี้</p></div>;
 
   return (
     <div className="space-y-2">
-      {cases.map((c: any) => (
-        <div key={c.id} className="flex items-center gap-3 rounded-2xl bg-white border border-gray-100 px-4 py-4 hover:border-gray-200 transition-all">
+      {cases.map((c) => (
+        <div key={c.id} className="flex items-center gap-4 rounded-2xl bg-white border border-gray-100 px-5 py-4">
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-gray-900">{c.procedureName}</div>
-            <div className="flex items-center gap-2 mt-1 text-xs text-gray-400 flex-wrap">
+            <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
               <span>{c.surgeon}</span><span>·</span><span>HN-xxxx{c.hnLast3}</span>
-              {c.preOpDiagnosis && <><span>·</span><span>{c.preOpDiagnosis}</span></>}
-              {c.planConsultUro && <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">Plan Uro</span>}
-              {c.planConsultColo && <span className="bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded">Plan Colo</span>}
             </div>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${c.setReady ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-400"}`}>{c.setReady ? "✓" : "○"} Set</span>
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${c.chargeWritten ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-400"}`}>{c.chargeWritten ? "✓" : "○"} Charge</span>
-            {canAdd && !c.operationId && (
-              <button onClick={() => router.push(`/operations/new?from=${c.id}`)} className="rounded-lg bg-teal-50 px-2.5 py-1.5 text-[11px] font-medium text-teal-700 hover:bg-teal-100 transition-colors">
-                + OR
-              </button>
-            )}
-            {c.operationId && (
-              <button onClick={() => router.push(`/operations/${c.operationId}`)} className="rounded-lg bg-gray-50 px-2.5 py-1.5 text-[11px] font-medium text-gray-500 hover:bg-gray-100 transition-colors">
-                ดู OR →
-              </button>
-            )}
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${c.setReady ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-400"}`}>
+              {c.setReady ? "✓" : "○"} Set
+            </span>
+            <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${c.chargeWritten ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-400"}`}>
+              {c.chargeWritten ? "✓" : "○"} Charge
+            </span>
           </div>
         </div>
       ))}
