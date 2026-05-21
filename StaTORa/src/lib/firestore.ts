@@ -50,7 +50,7 @@ function toDateFields(date: Date) {
 // ═══════════════════════════════════════════
 
 export async function createOperation(
-  data: Omit<OperationDoc, "id" | "createdAt" | "updatedAt" | "month" | "quarter" | "year" | "durationMinutes" | "isPPH" | "isPreterm">
+  data: Omit<OperationDoc, "id" | "createdAt" | "updatedAt" | "month" | "quarter" | "year" | "durationMinutes" | "isPPH" | "isPreterm" | "caseStatus">
 ): Promise<string> {
   const opDate = data.operationDate.toDate();
   const dateFields = toDateFields(opDate);
