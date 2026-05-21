@@ -95,6 +95,28 @@ export type AgeRange = (typeof AGE_RANGES)[number];
 export const GENDER_OPTIONS = ["Female", "Male"] as const;
 export type Gender = (typeof GENDER_OPTIONS)[number];
 
+// ─── Complication Types ───────────────────────
+export const COMPLICATION_TYPES = [
+  "foreign_body_retained",
+  "wound_infection",
+  "adjacent_organ_injury",
+  "preventable_incident",
+  "pph",
+  "unplanned_icu",
+  "other",
+] as const;
+export type ComplicationType = (typeof COMPLICATION_TYPES)[number];
+
+export const COMPLICATION_LABELS: Record<ComplicationType, string> = {
+  foreign_body_retained: "ผ้าซับโลหิต/เครื่องมือตกค้าง",
+  wound_infection: "การติดเชื้อแผลผ่าตัด",
+  adjacent_organ_injury: "บาดเจ็บอวัยวะข้างเคียง",
+  preventable_incident: "อุบัติการณ์ที่ป้องกันได้",
+  pph: "PPH",
+  unplanned_icu: "Unplanned ICU",
+  other: "อื่นๆ",
+};
+
 // ─── Case Status (flow tracking) ─────────────
 // pending_or  → หน่วยเปลสร้างเคสแล้ว รอคนเก็บสถิติกรอก OR form (ไม่นับสถิติ)
 // pending_rr  → OR form ครบแล้ว รอ RR Incharge กรอก RR form (ไม่นับสถิติ)
@@ -146,6 +168,9 @@ export interface OperationDoc {
   // ── NOTES specific rule ──
   // นับเฉพาะ NOTEs Assist to hysterectomy
   isNotesAssistHysterectomy?: boolean;
+
+  // ── Complication types (multi-select) ──
+  complicationTypes?: ComplicationType[];
 
   // ── Metadata ──
   createdBy: string; // uid
