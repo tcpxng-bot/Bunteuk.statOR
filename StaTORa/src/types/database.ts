@@ -17,7 +17,7 @@ export const ROLES = [
   "committee_rh",
   "committee_cs",
   "committee_ca_cervix",
-  "committee_pop",
+  "committee_ovarian_tumor",
 ] as const;
 
 export type Role = (typeof ROLES)[number];
@@ -65,27 +65,6 @@ export type Urgency = (typeof URGENCY_TYPES)[number];
 export const ANESTHESIA_TYPES_OR = ["GA", "Spinal", "Epidural", "LA"] as const;
 export type AnesthesiaTypeOR = (typeof ANESTHESIA_TYPES_OR)[number];
 
-export const COMPLICATION_TYPES = [
-  "ADJACENT_ORGAN_INJURY",   // การบาดเจ็บอวัยวะข้างเคียง
-  "FOREIGN_BODY_RETAINED",   // ลืมสิ่งแปลกปลอมในร่างกาย
-  "WOUND_INFECTION",         // การติดเชื้อของแผลผ่าตัด
-  "PREVENTABLE_INCIDENT",    // อุบัติเหตุที่ป้องกันได้ (จัดท่า/Burn/PI)
-  "UNPLANNED_ADMISSION",     // Unplanned admission
-  "UNPLANNED_ICU",           // Unplanned ICU
-  "OTHER",                   // อื่นๆ
-] as const;
-export type ComplicationType = (typeof COMPLICATION_TYPES)[number];
-
-export const COMPLICATION_LABELS: Record<ComplicationType, string> = {
-  ADJACENT_ORGAN_INJURY: "การบาดเจ็บอวัยวะข้างเคียง",
-  FOREIGN_BODY_RETAINED: "ลืมสิ่งแปลกปลอมในร่างกาย",
-  WOUND_INFECTION: "การติดเชื้อของแผลผ่าตัด",
-  PREVENTABLE_INCIDENT: "อุบัติเหตุที่ป้องกันได้ (จัดท่า/Burn/PI)",
-  UNPLANNED_ADMISSION: "Unplanned admission",
-  UNPLANNED_ICU: "Unplanned ICU",
-  OTHER: "อื่นๆ",
-};
-
 export const ANESTHESIA_TYPES_RR = [
   "GA",
   "RA",
@@ -103,7 +82,6 @@ export const DIAGNOSIS_GROUPS = [
   "CA corpus",
   "CA endometrium",
   "CA tube",
-  "POP",
 ] as const;
 export type DiagnosisGroup = (typeof DIAGNOSIS_GROUPS)[number];
 
@@ -115,6 +93,12 @@ export type AgeRange = (typeof AGE_RANGES)[number];
 
 export const GENDER_OPTIONS = ["Female", "Male"] as const;
 export type Gender = (typeof GENDER_OPTIONS)[number];
+
+// ─── Case Status (flow tracking) ─────────────
+// pending_or  → หน่วยเปลสร้างเคสแล้ว รอคนเก็บสถิติกรอก OR form (ไม่นับสถิติ)
+// pending_rr  → OR form ครบแล้ว รอ RR Incharge กรอก RR form (ไม่นับสถิติ)
+// complete    → ครบทุก form → นับเข้าสถิติ
+export type CaseStatus = "pending_or" | "pending_rr" | "complete";
 
 // ─── Operations Collection ────────────────────
 // Path: /operations/{operationId}
@@ -128,9 +112,7 @@ export interface OperationDoc {
   year: number;
   mainGroup: MainGroup;
   urgency: Urgency;
-  procedureName: string; // หัตถการที่ทำจริง (actual)
-  plannedProcedure?: string; // หัตถการที่วางแผนไว้จากหน่วยเปล
-  planChanged?: boolean; // auto: true ถ้า plannedProcedure != procedureName
+  procedureName: string; // จาก dropdown list
   diagnosisGroup: DiagnosisGroup; // Pre-op
   surgeon: string; // จาก dropdown list
   startTime: Timestamp;
@@ -139,7 +121,6 @@ export interface OperationDoc {
   anesthesiaType: AnesthesiaTypeOR;
   hasComplication: boolean;
   complicationNote: string;
-  complicationTypes?: ComplicationType[]; // ประเภท complication ที่เลือก
 
   // ── Optional fields ──
   postOpDiagnosis?: DiagnosisGroup;
@@ -147,17 +128,8 @@ export interface OperationDoc {
   ageRange?: AgeRange;
   asaClass?: ASAClass;
   operatingRoom?: string; // OR1, OR2, ...
-  scrubNurse?: string; // คนแรก (สำหรับ backward compatibility)
-  scrubNurses?: string[]; // หลายคน
+  scrubNurse?: string;
   circulateNurse?: string;
-  circulateNurses?: string[]; // หลายคน
-  assistantSurgeons?: string[]; // ทีมแพทย์ที่ร่วมผ่าตัด
-
-  // ── Post-op transfer ──
-  postOpTransfer?: "RR" | "ICU_NO_RR" | "ER_CONDITION_RR" | "HOME" | "UNPLANNED_ICU";
-  unplannedConsult?: boolean; // Unplanned consult in OR
-  preOpCaseId?: string; // link กับ preOpCase ของหน่วยเปล
-  hnLast3?: string; // HN 3 หลักท้าย (copy จาก preOpCase)
 
   // ── OB/C/S specific ──
   ebl?: number; // cc — auto flag PPH if >1000
@@ -178,7 +150,15 @@ export interface OperationDoc {
   createdBy: string; // uid
   createdAt: Timestamp;
   updatedAt: Timestamp;
+
+  // status ของ operation record เอง
   status: "draft" | "confirmed";
+
+  // caseStatus ติดตาม flow ทั้งหมดตั้งแต่หน่วยเปลสร้างเคส
+  caseStatus: CaseStatus;
+
+  // link กลับไปที่ preOpCase ที่หน่วยเปลสร้าง (ถ้ามี)
+  preOpCaseId?: string;
 }
 
 // ─── Stretcher Unit (หน่วยเปล) Pre-Op ────────
@@ -193,16 +173,13 @@ export interface PreOpCaseDoc {
   setReady: boolean; // จัด Set เรียบร้อย ✓
   chargeWritten: boolean; // เขียน Charge เรียบร้อย ✓
 
-  // Plan Consult (หน่วยเปลระบุล่วงหน้า)
-  planConsultUro?: boolean; // plan consult uro
-  planConsultColo?: boolean; // plan consult colo
-
-  // ติดตามผลการผ่าตัด (หน่วยเปลอัปเดต)
-  surgeryStatus?: "success" | "postponed" | "cancelled";
-  surgeryStatusNote?: string; // หมายเหตุ
-
   // Link to operation (หลังจากสร้าง operation record)
+  // เมื่อ link แล้ว ข้อมูล procedureName, surgeon, preOpDiagnosis, hnLast3
+  // จะ pre-fill ใน OR form ให้คนเก็บสถิติโดยอัตโนมัติ
   operationId?: string;
+
+  // caseStatus — เริ่มต้นที่ pending_or เสมอ อัปเดตตาม flow
+  caseStatus: CaseStatus;
 
   createdBy: string;
   createdAt: Timestamp;
@@ -243,7 +220,6 @@ export interface RRRecordDoc {
   preOpPainScoreNRS?: number;
 
   // ── Metadata ──
-  isAutoFilled?: boolean; // auto-created เมื่อไม่ผ่าน RR
   createdBy: string; // RR Incharge uid
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -298,7 +274,7 @@ export const COMMITTEE_TYPES = [
   "HYSTERO",
   "CA_CERVIX",
   "RH",
-  "POP",
+  "OVARIAN_TUMOR",
 ] as const;
 export type CommitteeType = (typeof COMMITTEE_TYPES)[number];
 
@@ -338,7 +314,7 @@ export function interpretPainScore(
       return nrs <= 5 ? "NRS ≤5 (ผ่าน)" : "NRS >5 (ไม่ผ่าน)";
     case "CA_CERVIX":
     case "RH":
-    case "POP":
+    case "OVARIAN_TUMOR":
       if (nrs <= 3) return "NRS ≤3";
       if (nrs <= 5) return "NRS 4-5";
       return "NRS >5";
