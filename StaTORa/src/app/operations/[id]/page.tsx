@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { getOperation, updateOperation, getRRRecordByOperationId } from "@/lib/firestore";
-import { OperationDoc, RRRecordDoc, COMPLICATION_LABELS } from "@/types/database";
+import { OperationDoc, RRRecordDoc } from "@/types/database";
 import { useAuth } from "@/contexts/AuthContext";
 
 function formatDateTime(ts: any): string {
@@ -116,15 +116,7 @@ export default function OperationDetailPage() {
                 "bg-gray-100 text-gray-600"
               }`}>{op.urgency}</span>
             } />
-            <Row label="หัตถการ" value={
-              <div>
-                <span>{op.procedureName}</span>
-                {op.planChanged && <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">🔄 เปลี่ยนแผน</span>}
-              </div>
-            } />
-            {op.plannedProcedure && op.plannedProcedure !== op.procedureName && (
-              <Row label="วางแผนไว้" value={<span className="text-gray-500 line-through">{op.plannedProcedure}</span>} />
-            )}
+            <Row label="หัตถการ" value={op.procedureName} />
             <Row label="แพทย์ผู้ผ่าตัด" value={op.surgeon} />
             <Row label="Pre-op Diagnosis" value={op.diagnosisGroup} />
             <Row label="Post-op Diagnosis" value={op.postOpDiagnosis} />
@@ -146,45 +138,14 @@ export default function OperationDetailPage() {
             <Row label="เพศ" value={op.gender} />
             <Row label="ช่วงอายุ" value={op.ageRange} />
             <Row label="ASA" value={op.asaClass} />
-            {op.hnLast3 && <Row label="HN" value={`HN-xxxx${op.hnLast3}`} />}
           </div>
 
-          {/* Team */}
-          {(op.assistantSurgeons && op.assistantSurgeons.length > 0) && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-              <h2 className="font-medium text-gray-700 mb-3 text-sm">ทีมแพทย์</h2>
-              <Row label="แพทย์ร่วมผ่าตัด" value={
-                <div className="flex flex-wrap gap-1.5 justify-end">
-                  {op.assistantSurgeons.map((s) => (
-                    <span key={s} className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs">{s}</span>
-                  ))}
-                </div>
-              } />
-            </div>
-          )}
-
           {/* Nursing */}
-          {(op.scrubNurse || op.circulateNurse || (op.scrubNurses && op.scrubNurses.length > 0) || (op.circulateNurses && op.circulateNurses.length > 0)) && (
+          {(op.scrubNurse || op.circulateNurse) && (
             <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
               <h2 className="font-medium text-gray-700 mb-3 text-sm">พยาบาล</h2>
-              <Row label="Scrub Nurse" value={
-                op.scrubNurses && op.scrubNurses.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5 justify-end">
-                    {op.scrubNurses.map((s) => (
-                      <span key={s} className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded text-xs">{s}</span>
-                    ))}
-                  </div>
-                ) : op.scrubNurse
-              } />
-              <Row label="Circulate Nurse" value={
-                op.circulateNurses && op.circulateNurses.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5 justify-end">
-                    {op.circulateNurses.map((s) => (
-                      <span key={s} className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded text-xs">{s}</span>
-                    ))}
-                  </div>
-                ) : op.circulateNurse
-              } />
+              <Row label="Scrub Nurse" value={op.scrubNurse} />
+              <Row label="Circulate Nurse" value={op.circulateNurse} />
             </div>
           )}
 
@@ -192,15 +153,6 @@ export default function OperationDetailPage() {
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
             <h2 className="font-medium text-gray-700 mb-3 text-sm">Complication</h2>
             <Row label="มี Complication" value={op.hasComplication ? "✓ มี" : "ไม่มี"} />
-            {op.hasComplication && op.complicationTypes && op.complicationTypes.length > 0 && (
-              <Row label="ประเภท" value={
-                <div className="flex flex-wrap gap-1.5 justify-end">
-                  {op.complicationTypes.map((t) => (
-                    <span key={t} className="bg-red-50 text-red-700 px-2 py-0.5 rounded text-xs">{COMPLICATION_LABELS[t]}</span>
-                  ))}
-                </div>
-              } />
-            )}
             {op.hasComplication && <Row label="หมายเหตุ" value={op.complicationNote} />}
           </div>
 
@@ -267,7 +219,7 @@ export default function OperationDetailPage() {
 
           {/* Actions */}
           <div className="flex gap-3 pt-2">
-            {op.status !== "confirmed" && (isSuperAdmin || true) && (
+            {op.status !== "confirmed" && (
               <button
                 onClick={handleConfirm}
                 disabled={confirming}
@@ -277,10 +229,10 @@ export default function OperationDetailPage() {
               </button>
             )}
             <button
-              onClick={() => router.push(`/operations/new?edit=${op.id}`)}
+              onClick={() => router.push(`/operations/${op.id}/edit`)}
               className="flex-1 rounded-xl border border-gray-200 text-gray-700 py-3 text-sm font-medium hover:bg-gray-50 transition-colors"
             >
-              แก้ไข
+              ✎ แก้ไข
             </button>
           </div>
         </div>
