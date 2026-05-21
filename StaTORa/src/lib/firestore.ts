@@ -120,6 +120,10 @@ export async function updateOperation(
   await updateDoc(ref, updates);
 }
 
+export async function deleteOperation(id: string): Promise<void> {
+  await deleteDoc(doc(db, "operations", id));
+}
+
 export async function getOperation(id: string): Promise<OperationDoc | null> {
   const snap = await getDoc(doc(db, "operations", id));
   return snap.exists() ? (snap.data() as OperationDoc) : null;
