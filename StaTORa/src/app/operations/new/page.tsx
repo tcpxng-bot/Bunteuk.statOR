@@ -1,199 +1,19 @@
 // src/app/operations/new/page.tsx
 "use client";
 
-import { useState, useMemo, useEffect, FormEvent, Suspense } from "react";
+import { useState, useMemo, useEffect, FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { PreOpCaseDoc } from "@/types/database";
 import { Timestamp } from "firebase/firestore";
 import { AppShell } from "@/components/AppShell";
 import { Field, Select, TextInput, Toggle, PillSelect, Textarea } from "@/components/FormFields";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDropdownList, useProceduresByMainGroup } from "@/hooks/useDropdowns";
-import { createOperation, createRRRecord, setDropdownList, getDropdownList, updatePreOpCase, checkDuplicateOperation } from "@/lib/firestore";
-import { DropdownItem } from "@/types/database";
-
-// ── Inline Add Select ──────────────────────────
-function InlineAddSelect({
-  value, onChange, items, placeholder, listName, mainGroup,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  items: DropdownItem[];
-  placeholder: string;
-  listName: string;
-  mainGroup?: string;
-}) {
-  const [adding, setAdding] = useState(false);
-  const [newVal, setNewVal] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  async function handleAdd() {
-    const val = newVal.trim();
-    if (!val) return;
-    setSaving(true);
-    try {
-      const existing = await getDropdownList(listName);
-      const currentItems = existing?.items ?? [];
-      if (!currentItems.some((i) => i.value === val)) {
-        const newItem: DropdownItem = { value: val, label: val, isActive: true, sortOrder: currentItems.length, ...(mainGroup ? { mainGroup: mainGroup as any } : {}) };
-        await setDropdownList(listName, { listName, items: [...currentItems, newItem], updatedBy: "" });
-      }
-      onChange(val);
-    } catch(e) { console.error("InlineAddSelect error:", e); }
-    setNewVal("");
-    setAdding(false);
-    setSaving(false);
-  }
-
-  if (adding) {
-    return (
-      <div className="flex gap-2">
-        <input
-          autoFocus
-          type="text"
-          value={newVal}
-          onChange={(e) => setNewVal(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); if (e.key === "Escape") setAdding(false); }}
-          placeholder="พิมพ์แล้วกด Enter"
-          className="flex-1 rounded-lg border border-teal-400 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-        />
-        <button onClick={handleAdd} disabled={saving} className="px-3 py-2 rounded-lg bg-teal-600 text-white text-sm disabled:opacity-50">
-          {saving ? "..." : "เพิ่ม"}
-        </button>
-        <button onClick={() => setAdding(false)} className="px-3 py-2 rounded-lg border border-gray-200 text-sm">ยกเลิก</button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex gap-2">
-      <div className="flex-1">
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
-        >
-          <option value="">{placeholder}</option>
-          {items.map((i) => <option key={i.value} value={i.value}>{i.label}</option>)}
-        </select>
-      </div>
-      <button
-        type="button"
-        onClick={() => setAdding(true)}
-        className="px-3 py-2 rounded-lg border border-gray-200 text-teal-600 text-sm hover:bg-teal-50 transition-colors whitespace-nowrap"
-        title="เพิ่มรายการใหม่"
-      >
-        + เพิ่ม
-      </button>
-    </div>
-  );
-}
-
-// ── Multi Inline Add Select ────────────────────
-function MultiInlineAddSelect({
-  values, onChange, items, placeholder, listName,
-}: {
-  values: string[];
-  onChange: (v: string[]) => void;
-  items: DropdownItem[];
-  placeholder: string;
-  listName: string;
-}) {
-  const [selecting, setSelecting] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [newVal, setNewVal] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  async function handleAddNew() {
-    const val = newVal.trim();
-    if (!val) return;
-    setSaving(true);
-    try {
-      const existing = await getDropdownList(listName);
-      const currentItems = existing?.items ?? [];
-      if (!currentItems.some((i) => i.value === val)) {
-        const newItem: DropdownItem = { value: val, label: val, isActive: true, sortOrder: currentItems.length };
-        await setDropdownList(listName, { listName, items: [...currentItems, newItem], updatedBy: "" });
-      }
-      if (!values.includes(val)) onChange([...values, val]);
-    } catch(e) { console.error(e); }
-    setNewVal("");
-    setAdding(false);
-    setSaving(false);
-  }
-
-  function handleSelect(val: string) {
-    if (val && !values.includes(val)) onChange([...values, val]);
-    setSelecting("");
-  }
-
-  function handleRemove(val: string) {
-    onChange(values.filter((v) => v !== val));
-  }
-
-  return (
-    <div className="space-y-2">
-      {/* Selected items */}
-      {values.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {values.map((v) => (
-            <span key={v} className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 text-teal-700 px-2.5 py-1 text-xs">
-              {v}
-              <button type="button" onClick={() => handleRemove(v)} className="text-teal-500 hover:text-red-500">×</button>
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Add new mode */}
-      {adding ? (
-        <div className="flex gap-2">
-          <input
-            autoFocus
-            type="text"
-            value={newVal}
-            onChange={(e) => setNewVal(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddNew(); } if (e.key === "Escape") setAdding(false); }}
-            placeholder="พิมพ์แล้วกด Enter"
-            className="flex-1 rounded-lg border border-teal-400 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-          />
-          <button type="button" onClick={handleAddNew} disabled={saving} className="px-3 py-2 rounded-lg bg-teal-600 text-white text-sm disabled:opacity-50">{saving ? "..." : "เพิ่ม"}</button>
-          <button type="button" onClick={() => setAdding(false)} className="px-3 py-2 rounded-lg border border-gray-200 text-sm">ยกเลิก</button>
-        </div>
-      ) : (
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <select
-              value={selecting}
-              onChange={(e) => handleSelect(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
-            >
-              <option value="">{placeholder}</option>
-              {items.filter((i) => !values.includes(i.value)).map((i) => <option key={i.value} value={i.value}>{i.label}</option>)}
-            </select>
-          </div>
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="px-3 py-2 rounded-lg border border-gray-200 text-teal-600 text-sm hover:bg-teal-50 transition-colors whitespace-nowrap"
-          >
-            + เพิ่ม
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
+import { createOperation, getPreOpCase } from "@/lib/firestore";
 import {
   MAIN_GROUPS,
   URGENCY_TYPES,
   ANESTHESIA_TYPES_OR,
   DIAGNOSIS_GROUPS,
-  COMPLICATION_TYPES,
-  COMPLICATION_LABELS,
-  ComplicationType,
   ASA_CLASSES,
   AGE_RANGES,
   GENDER_OPTIONS,
@@ -204,6 +24,7 @@ import {
   ASAClass,
   AgeRange,
   Gender,
+  PreOpCaseDoc,
 } from "@/types/database";
 
 // Form state type
@@ -213,26 +34,22 @@ interface ORFormState {
   mainGroup: MainGroup | "";
   urgency: Urgency | "";
   procedureName: string;
-  diagnosisGroup: string;
+  diagnosisGroup: DiagnosisGroup | "";
   surgeon: string;
   startTime: string;
   endTime: string;
   anesthesiaType: AnesthesiaTypeOR | "";
   hasComplication: boolean;
   complicationNote: string;
-  complicationTypes: ComplicationType[];
 
   // Optional
-  postOpDiagnosis: string;
+  postOpDiagnosis: DiagnosisGroup | "";
   gender: Gender | "";
   ageRange: AgeRange | "";
   asaClass: ASAClass | "";
   operatingRoom: string;
   scrubNurse: string;
   circulateNurse: string;
-  scrubNurses: string[];
-  circulateNurses: string[];
-  assistantSurgeons: string[];
 
   // OB/C/S specific
   ebl: string;
@@ -245,13 +62,6 @@ interface ORFormState {
 
   // NOTES specific
   isNotesAssistHysterectomy: boolean;
-
-  // Post-op transfer & consult
-  postOpTransfer: "RR" | "ICU_NO_RR" | "ER_CONDITION_RR" | "HOME" | "UNPLANNED_ICU" | "";
-  unplannedConsult: boolean;
-  preOpCaseId: string;
-  plannedProcedure: string;
-  hnLast3: string;
 }
 
 const INITIAL_STATE: ORFormState = {
@@ -266,7 +76,6 @@ const INITIAL_STATE: ORFormState = {
   anesthesiaType: "",
   hasComplication: false,
   complicationNote: "",
-  complicationTypes: [],
   postOpDiagnosis: "",
   gender: "",
   ageRange: "",
@@ -274,46 +83,41 @@ const INITIAL_STATE: ORFormState = {
   operatingRoom: "",
   scrubNurse: "",
   circulateNurse: "",
-  scrubNurses: [],
-  circulateNurses: [],
-  assistantSurgeons: [],
   ebl: "",
   gestationalAge: "",
   unplannedICU: false,
   fluidBalance: "",
   unplannedAdmission: false,
   isNotesAssistHysterectomy: false,
-  postOpTransfer: "",
-  unplannedConsult: false,
-  preOpCaseId: "",
-  plannedProcedure: "",
-  hnLast3: "",
 };
 
-function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
+export default function NewOperationPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preOpCaseId = searchParams.get("preOpCaseId");
+
   const { user } = useAuth();
   const [form, setForm] = useState<ORFormState>(INITIAL_STATE);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saveMsg, setSaveMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  // Pre-fill from หน่วยเปล case — preOpId passed as prop from parent
+  const [preOpCase, setPreOpCase] = useState<PreOpCaseDoc | null>(null);
+
+  // Pre-fill form จากข้อมูลหน่วยเปล ถ้ามี preOpCaseId ใน query param
   useEffect(() => {
-    if (!preOpId) return;
-    getDoc(doc(db, "preOpCases", preOpId)).then((snap) => {
-      if (!snap.exists()) return;
-      const c = snap.data() as PreOpCaseDoc;
+    if (!preOpCaseId) return;
+    getPreOpCase(preOpCaseId).then((c) => {
+      if (!c) return;
+      setPreOpCase(c);
       setForm((prev) => ({
         ...prev,
-        procedureName: c.procedureName || prev.procedureName,
-        plannedProcedure: c.procedureName || "",
-        surgeon: c.surgeon || prev.surgeon,
-        diagnosisGroup: (c.preOpDiagnosis as any) || prev.diagnosisGroup,
-        preOpCaseId: preOpId,
-        hnLast3: c.hnLast3 || "",
+        procedureName: c.procedureName,
+        surgeon: c.surgeon,
+        diagnosisGroup: c.preOpDiagnosis as any || prev.diagnosisGroup,
+        operationDate: c.operationDate.toDate().toISOString().split("T")[0],
       }));
     });
-  }, [preOpId]);
+  }, [preOpCaseId]);
 
   // Dropdowns
   const { procedures } = useProceduresByMainGroup(form.mainGroup as MainGroup || null);
@@ -391,29 +195,27 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
       const endDate = new Date(opDate);
       endDate.setHours(eh, em, 0);
 
-      const newOpId = await createOperation({
+      await createOperation({
         operationDate: Timestamp.fromDate(opDate),
         mainGroup: form.mainGroup as MainGroup,
         urgency: (form.urgency || "Elective") as Urgency,
         procedureName: form.procedureName,
-        diagnosisGroup: (form.diagnosisGroup || "Benign") as any,
+        diagnosisGroup: (form.diagnosisGroup || "Benign") as DiagnosisGroup,
         surgeon: form.surgeon,
         startTime: Timestamp.fromDate(startDate),
         endTime: Timestamp.fromDate(endDate),
         anesthesiaType: (form.anesthesiaType || "GA") as AnesthesiaTypeOR,
         hasComplication: form.hasComplication,
         complicationNote: form.complicationNote,
-        ...(form.hasComplication && form.complicationTypes.length > 0 && { complicationTypes: form.complicationTypes }),
 
         // Optional
-        ...(form.postOpDiagnosis && { postOpDiagnosis: form.postOpDiagnosis as any }),
+        ...(form.postOpDiagnosis && { postOpDiagnosis: form.postOpDiagnosis as DiagnosisGroup }),
         ...(form.gender && { gender: form.gender as Gender }),
         ...(form.ageRange && { ageRange: form.ageRange as AgeRange }),
         ...(form.asaClass && { asaClass: form.asaClass as ASAClass }),
         ...(form.operatingRoom && { operatingRoom: form.operatingRoom }),
-        ...(form.scrubNurses.length > 0 && { scrubNurse: form.scrubNurses[0], scrubNurses: form.scrubNurses }),
-        ...(form.circulateNurses.length > 0 && { circulateNurse: form.circulateNurses[0], circulateNurses: form.circulateNurses }),
-        ...(form.assistantSurgeons.length > 0 && { assistantSurgeons: form.assistantSurgeons }),
+        ...(form.scrubNurse && { scrubNurse: form.scrubNurse }),
+        ...(form.circulateNurse && { circulateNurse: form.circulateNurse }),
 
         // OB
         ...(isOB && form.ebl && { ebl: parseInt(form.ebl) }),
@@ -427,40 +229,11 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
         // NOTES
         ...(isNotes && { isNotesAssistHysterectomy: form.isNotesAssistHysterectomy }),
 
-        // Post-op transfer & consult
-        ...(form.postOpTransfer && { postOpTransfer: form.postOpTransfer as any }),
-        unplannedConsult: form.unplannedConsult,
-        ...(form.preOpCaseId && { preOpCaseId: form.preOpCaseId }),
-        ...(form.plannedProcedure && { plannedProcedure: form.plannedProcedure }),
-        ...(form.plannedProcedure && form.plannedProcedure !== form.procedureName && { planChanged: true }),
-        ...(form.hnLast3 && { hnLast3: form.hnLast3 }),
-
         createdBy: user?.uid || "",
         status,
+        // link กลับไปที่ preOpCase (ถ้ามี) → firestore จะ auto-update caseStatus
+        ...(preOpCaseId && { preOpCaseId }),
       });
-
-      // ถ้า transfer ไม่ผ่าน RR → auto-create RR record
-      if (form.postOpTransfer && form.postOpTransfer !== "RR" && newOpId) {
-        await createRRRecord({
-          operationId: newOpId,
-          postOpRoute: form.postOpTransfer as any,
-          anesthesiaType: (form.anesthesiaType || "GA") as any,
-          airway: "NONE",
-          patientLevel: "LEVEL_2",
-          hasChill: false,
-          hasHypothermia: false,
-          hasHypoxia: false,
-          painScoreNRS: 0,
-          painScoreVRS: "NO_PAIN",
-          createdBy: user?.uid || "",
-          isAutoFilled: true,
-        });
-      }
-
-      // link preOpCase กับ operation ที่สร้าง
-      if (form.preOpCaseId && newOpId) {
-        await updatePreOpCase(form.preOpCaseId, { operationId: newOpId });
-      }
 
       setSaveMsg({ type: "success", text: `บันทึก${status === "confirmed" ? "สำเร็จ" : " draft สำเร็จ"}` });
 
@@ -487,7 +260,7 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
           กรอกข้อมูลหัตถการ — ช่องที่มี <span className="text-red-400">*</span> ต้องกรอก
         </p>
 
-        <form onSubmit={(e) => handleSubmit(e, "confirmed")} id="form-main" className="space-y-8">
+        <form onSubmit={(e) => handleSubmit(e, "confirmed")} className="space-y-8">
           {/* ═══════════════════════════════
               Section 1: ข้อมูลหลัก
           ═══════════════════════════════ */}
@@ -527,26 +300,14 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
               />
             </Field>
 
-            <Field label="หัตถการที่ทำจริง" required error={errors.procedureName} hint={form.plannedProcedure ? `วางแผน: ${form.plannedProcedure}` : undefined}>
-              {form.mainGroup ? (
-                <InlineAddSelect
-                  value={form.procedureName}
-                  onChange={(v) => set("procedureName", v)}
-                  items={procedures}
-                  placeholder="เลือกหรือพิมพ์เพิ่มหัตถการ"
-                  listName="procedures"
-                  mainGroup={form.mainGroup || undefined}
-                />
-              ) : (
-                <div className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400">
-                  เลือก Main Group ก่อน
-                </div>
-              )}
-              {form.plannedProcedure && form.procedureName && form.plannedProcedure !== form.procedureName && (
-                <p className="mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 flex items-center gap-2">
-                  🔄 <span>เปลี่ยนแผนผ่าตัด: <span className="font-medium">{form.plannedProcedure}</span> → <span className="font-medium">{form.procedureName}</span></span>
-                </p>
-              )}
+            <Field label="หัตถการ" required error={errors.procedureName}>
+              <Select
+                value={form.procedureName}
+                onChange={(v) => set("procedureName", v)}
+                options={procedures.map((p) => ({ value: p.value, label: p.label }))}
+                placeholder={form.mainGroup ? "เลือกหัตถการ" : "เลือก Main Group ก่อน"}
+                disabled={!form.mainGroup}
+              />
             </Field>
           </Section>
 
@@ -555,21 +316,23 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
           ═══════════════════════════════ */}
           <Section title="ข้อมูลผู้ป่วย & ทีมผ่าตัด">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Pre-op Diagnosis" required error={errors.diagnosisGroup} hint="prefill จากหน่วยเปล หรือพิมพ์เอง">
-                <TextInput
+              <Field label="Pre-op Diagnosis" required error={errors.diagnosisGroup}>
+                <Select
                   value={form.diagnosisGroup}
-                  onChange={(v) => set("diagnosisGroup", v)}
-                  placeholder="เช่น Benign, POP, CA cervix..."
+                  onChange={(v) => set("diagnosisGroup", v as ORFormState["diagnosisGroup"])}
+                  options={DIAGNOSIS_GROUPS.map((d) => ({ value: d, label: d }))}
+                  placeholder="เลือก Diagnosis"
                 />
               </Field>
 
               <Field label="Post-op Diagnosis">
-                <InlineAddSelect
+                <Select
                   value={form.postOpDiagnosis}
-                  onChange={(v) => set("postOpDiagnosis", v)}
-                  items={DIAGNOSIS_GROUPS.map((d) => ({ value: d, label: d, isActive: true, sortOrder: 0 }))}
-                  placeholder="เลือกหรือเพิ่ม Post-op Diagnosis"
-                  listName="postOpDiagnoses"
+                  onChange={(v) => set("postOpDiagnosis", v as ORFormState["postOpDiagnosis"])}
+                  options={[
+                    { value: "", label: "—" },
+                    ...DIAGNOSIS_GROUPS.map((d) => ({ value: d, label: d })),
+                  ]}
                 />
               </Field>
             </div>
@@ -607,54 +370,37 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
                   ]}
                 />
               </Field>
-
-              <Field label="HN (3 หลักท้าย)" hint="เช่น 097">
-                <TextInput
-                  value={form.hnLast3}
-                  onChange={(v) => set("hnLast3", v.replace(/[^0-9]/g, "").slice(0, 4))}
-                  placeholder="เช่น 097"
-                />
-              </Field>
             </div>
 
             <Field label="แพทย์ผ่าตัด" required error={errors.surgeon}>
-              <InlineAddSelect
+              <Select
                 value={form.surgeon}
                 onChange={(v) => set("surgeon", v)}
-                items={surgeons}
+                options={surgeons.map((s) => ({ value: s.value, label: s.label }))}
                 placeholder="เลือกแพทย์"
-                listName="surgeons"
-              />
-            </Field>
-
-            <Field label="ทีมแพทย์" hint="แพทย์ที่ร่วมผ่าตัด (เพิ่มได้หลายคน)">
-              <MultiInlineAddSelect
-                values={form.assistantSurgeons}
-                onChange={(v) => set("assistantSurgeons", v)}
-                items={surgeons.filter((s) => s.value !== form.surgeon)}
-                placeholder="+ เพิ่มแพทย์ร่วมผ่าตัด"
-                listName="surgeons"
               />
             </Field>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Scrub Nurse" hint="เพิ่มได้หลายคน (กรณีมีการเปลี่ยนกะ)">
-                <MultiInlineAddSelect
-                  values={form.scrubNurses}
-                  onChange={(v) => set("scrubNurses", v)}
-                  items={scrubNurses}
-                  placeholder="+ เพิ่ม Scrub Nurse"
-                  listName="scrubNurses"
+              <Field label="Scrub Nurse">
+                <Select
+                  value={form.scrubNurse}
+                  onChange={(v) => set("scrubNurse", v)}
+                  options={[
+                    { value: "", label: "—" },
+                    ...scrubNurses.map((s) => ({ value: s.value, label: s.label })),
+                  ]}
                 />
               </Field>
 
-              <Field label="Circulate Nurse" hint="เพิ่มได้หลายคน">
-                <MultiInlineAddSelect
-                  values={form.circulateNurses}
-                  onChange={(v) => set("circulateNurses", v)}
-                  items={circulateNurses}
-                  placeholder="+ เพิ่ม Circulate Nurse"
-                  listName="circulateNurses"
+              <Field label="Circulate Nurse">
+                <Select
+                  value={form.circulateNurse}
+                  onChange={(v) => set("circulateNurse", v)}
+                  options={[
+                    { value: "", label: "—" },
+                    ...circulateNurses.map((s) => ({ value: s.value, label: s.label })),
+                  ]}
                 />
               </Field>
             </div>
@@ -705,7 +451,7 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
           {/* ═══════════════════════════════
               Section 4: Complication
           ═══════════════════════════════ */}
-          <Section title="Complication & Consult">
+          <Section title="Complication">
             <Toggle
               checked={form.hasComplication}
               onChange={(v) => set("hasComplication", v)}
@@ -714,83 +460,14 @@ function NewOperationPageInner({ preOpId }: { preOpId?: string }) {
             />
 
             {form.hasComplication && (
-              <>
-                <Field label="ประเภท Complication" hint="เลือกได้หลายข้อ">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {COMPLICATION_TYPES.map((type) => {
-                      const isChecked = form.complicationTypes.includes(type);
-                      return (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => {
-                            const newTypes = isChecked
-                              ? form.complicationTypes.filter((t) => t !== type)
-                              : [...form.complicationTypes, type];
-                            set("complicationTypes", newTypes);
-                          }}
-                          className={`text-left rounded-xl px-3 py-2.5 text-sm border transition-colors ${
-                            isChecked
-                              ? "bg-red-50 text-red-700 border-red-300"
-                              : "bg-white text-gray-600 border-gray-200 hover:border-red-200"
-                          }`}
-                        >
-                          <span className="mr-2">{isChecked ? "✓" : "○"}</span>
-                          {COMPLICATION_LABELS[type]}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </Field>
-                <Field label="รายละเอียดเพิ่มเติม" required error={errors.complicationNote}>
-                  <Textarea
-                    value={form.complicationNote}
-                    onChange={(v) => set("complicationNote", v)}
-                    placeholder="ระบุรายละเอียด..."
-                    rows={3}
-                  />
-                </Field>
-              </>
-            )}
-
-            <Toggle
-              checked={form.unplannedConsult}
-              onChange={(v) => set("unplannedConsult", v)}
-              label="Unplanned Consult in OR"
-              description="มีการ consult โดยไม่ได้วางแผนล่วงหน้า"
-            />
-          </Section>
-
-          {/* Post-op Transfer */}
-          <Section title="ย้ายผู้ป่วยหลังผ่าตัด">
-            <Field label="ย้ายไปที่" hint="เลือกเส้นทางหลังผ่าตัด">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {([
-                  { value: "RR", label: "ไป RR" },
-                  { value: "ICU_NO_RR", label: "ICU (ไม่ผ่าน RR)" },
-                  { value: "ER_CONDITION_RR", label: "ER Condition RR" },
-                  { value: "HOME", label: "กลับบ้าน" },
-                  { value: "UNPLANNED_ICU", label: "Unplanned ICU" },
-                ] as const).map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => set("postOpTransfer", form.postOpTransfer === opt.value ? "" : opt.value)}
-                    className={`rounded-xl px-3 py-2 text-sm font-medium border transition-colors ${
-                      form.postOpTransfer === opt.value
-                        ? "bg-teal-600 text-white border-teal-600"
-                        : "bg-white text-gray-600 border-gray-200 hover:border-teal-300"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </Field>
-            {form.postOpTransfer && form.postOpTransfer !== "RR" && (
-              <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
-                ⚠️ ระบบจะ auto-บันทึก RR record ให้อัตโนมัติ — RR Incharge สามารถแก้ไขเพิ่มเติมได้ภายหลัง
-              </p>
+              <Field label="รายละเอียด Complication" required error={errors.complicationNote}>
+                <Textarea
+                  value={form.complicationNote}
+                  onChange={(v) => set("complicationNote", v)}
+                  placeholder="ระบุรายละเอียด..."
+                  rows={3}
+                />
+              </Field>
             )}
           </Section>
 
@@ -961,19 +638,5 @@ function Section({
       <h2 className="text-base font-medium text-gray-900">{title}</h2>
       {children}
     </div>
-  );
-}
-
-function SearchParamsReader() {
-  const searchParams = useSearchParams();
-  const preOpId = searchParams.get("from") ?? undefined;
-  return <NewOperationPageInner preOpId={preOpId} />;
-}
-
-export default function NewOperationPage() {
-  return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-500 border-t-transparent" /></div>}>
-      <SearchParamsReader />
-    </Suspense>
   );
 }
