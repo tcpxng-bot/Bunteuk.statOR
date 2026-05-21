@@ -1,7 +1,7 @@
 // src/app/operations/new/page.tsx
 "use client";
 
-import { useState, useMemo, useEffect, FormEvent } from "react";
+import { useState, useMemo, useEffect, FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Timestamp } from "firebase/firestore";
 import { AppShell } from "@/components/AppShell";
@@ -91,7 +91,7 @@ const INITIAL_STATE: ORFormState = {
   isNotesAssistHysterectomy: false,
 };
 
-export default function NewOperationPage() {
+function NewOperationForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preOpCaseId = searchParams.get("preOpCaseId");
@@ -606,6 +606,22 @@ export default function NewOperationPage() {
         </form>
       </div>
     </AppShell>
+  );
+}
+
+// ═══════════════════════════════
+// Page wrapper — Suspense required for useSearchParams
+// ═══════════════════════════════
+
+export default function NewOperationPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex justify-center py-24">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-500 border-t-transparent" />
+      </div>
+    }>
+      <NewOperationForm />
+    </Suspense>
   );
 }
 
