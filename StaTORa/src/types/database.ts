@@ -1,256 +1,347 @@
-// src/lib/committeeConfig.ts
-// Committee configuration — ตัวชี้วัดกรรมการแต่ละประเภท
+// src/types/database.ts
+// ===============================================
+// OR Ward Statistics — Firestore Database Schema
+// ===============================================
 
-import { CommitteeType, MainGroup } from "@/types/database";
-import { Role } from "@/types/database";
+import { Timestamp } from "firebase/firestore";
 
-export interface IndicatorField {
-  key: string;
+// ─── Roles ────────────────────────────────────
+export const ROLES = [
+  "super_admin",
+  "statistician", // คนเก็บสถิติประจำเดือน
+  "rr_incharge", // RR Incharge
+  "stretcher_unit", // หน่วยเปล
+  "committee_hystero",
+  "committee_tah",
+  "committee_lh_tlh",
+  "committee_rh",
+  "committee_cs",
+  "committee_ca_cervix",
+  "committee_ovarian_tumor",
+  "committee_pop",
+] as const;
+
+export type Role = (typeof ROLES)[number];
+
+// ─── Users Collection ─────────────────────────
+// Path: /users/{uid}
+export interface UserDoc {
+  uid: string;
+  email: string;
+  displayName: string;
+  roles: Role[];
+  isActive: boolean;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  createdBy: string; // uid ของ super_admin ที่สร้าง
+}
+
+// ─── Statistician Assignment ──────────────────
+// Path: /statisticianAssignments/{year-month}
+// เช่น /statisticianAssignments/2026-05
+export interface StatisticianAssignment {
+  yearMonth: string; // "2026-05"
+  assignedUid: string;
+  assignedName: string;
+  assignedBy: string; // super_admin uid
+  assignedAt: Timestamp;
+}
+
+// ─── Enums / Dropdown values ──────────────────
+export const MAIN_GROUPS = [
+  "GYN",
+  "OB",
+  "LAP_SURG",
+  "HYSTERO",
+  "ATR",
+  "NOTES",
+  "LASER",
+  "OTHER",
+] as const;
+export type MainGroup = (typeof MAIN_GROUPS)[number];
+
+export const URGENCY_TYPES = ["Elective", "Emergency", "Other"] as const;
+export type Urgency = (typeof URGENCY_TYPES)[number];
+
+export const ANESTHESIA_TYPES_OR = ["GA", "Spinal", "Epidural", "LA"] as const;
+export type AnesthesiaTypeOR = (typeof ANESTHESIA_TYPES_OR)[number];
+
+export const ANESTHESIA_TYPES_RR = [
+  "GA",
+  "RA",
+  "IV Sedation",
+  "Combined",
+  "Local",
+] as const;
+export type AnesthesiaTypeRR = (typeof ANESTHESIA_TYPES_RR)[number];
+
+export const DIAGNOSIS_GROUPS = [
+  "Benign",
+  "Ovarian tumor",
+  "CA ovary",
+  "CA cervix",
+  "CA corpus",
+  "CA endometrium",
+  "CA tube",
+] as const;
+export type DiagnosisGroup = (typeof DIAGNOSIS_GROUPS)[number];
+
+export const ASA_CLASSES = ["I", "II", "III", "IV"] as const;
+export type ASAClass = (typeof ASA_CLASSES)[number];
+
+export const AGE_RANGES = ["<20", "20-40", ">40"] as const;
+export type AgeRange = (typeof AGE_RANGES)[number];
+
+export const GENDER_OPTIONS = ["Female", "Male"] as const;
+export type Gender = (typeof GENDER_OPTIONS)[number];
+
+// ─── Case Status (flow tracking) ─────────────
+// pending_or  → หน่วยเปลสร้างเคสแล้ว รอคนเก็บสถิติกรอก OR form (ไม่นับสถิติ)
+// pending_rr  → OR form ครบแล้ว รอ RR Incharge กรอก RR form (ไม่นับสถิติ)
+// complete    → ครบทุก form → นับเข้าสถิติ
+export type CaseStatus = "pending_or" | "pending_rr" | "complete";
+
+// ─── Operations Collection ────────────────────
+// Path: /operations/{operationId}
+export interface OperationDoc {
+  id: string;
+
+  // ── Required fields ──
+  operationDate: Timestamp;
+  month: number; // 1-12
+  quarter: number; // 1-4
+  year: number;
+  mainGroup: MainGroup;
+  urgency: Urgency;
+  procedureName: string; // จาก dropdown list
+  diagnosisGroup: DiagnosisGroup; // Pre-op
+  surgeon: string; // จาก dropdown list
+  startTime: Timestamp;
+  endTime: Timestamp;
+  durationMinutes: number; // auto-calculated
+  anesthesiaType: AnesthesiaTypeOR;
+  hasComplication: boolean;
+  complicationNote: string;
+
+  // ── Optional fields ──
+  postOpDiagnosis?: DiagnosisGroup;
+  gender?: Gender;
+  ageRange?: AgeRange;
+  asaClass?: ASAClass;
+  operatingRoom?: string; // OR1, OR2, ...
+  scrubNurse?: string;
+  circulateNurse?: string;
+
+  // ── OB/C/S specific ──
+  ebl?: number; // cc — auto flag PPH if >1000
+  isPPH?: boolean; // auto: ebl > 1000
+  gestationalAge?: number; // weeks — auto flag Preterm if <37
+  isPreterm?: boolean; // auto: GA < 37
+  unplannedICU?: boolean;
+
+  // ── HYSTERO specific ──
+  fluidBalance?: "<500" | "500-1000" | ">1000"; // cc
+  unplannedAdmission?: boolean;
+
+  // ── NOTES specific rule ──
+  // นับเฉพาะ NOTEs Assist to hysterectomy
+  isNotesAssistHysterectomy?: boolean;
+
+  // ── Metadata ──
+  createdBy: string; // uid
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+
+  // status ของ operation record เอง
+  status: "draft" | "confirmed";
+
+  // caseStatus ติดตาม flow ทั้งหมดตั้งแต่หน่วยเปลสร้างเคส
+  caseStatus: CaseStatus;
+
+  // link กลับไปที่ preOpCase ที่หน่วยเปลสร้าง (ถ้ามี)
+  preOpCaseId?: string;
+}
+
+// ─── Stretcher Unit (หน่วยเปล) Pre-Op ────────
+// Path: /preOpCases/{caseId}
+export interface PreOpCaseDoc {
+  id: string;
+  operationDate: Timestamp; // วันพรุ่งนี้
+  procedureName: string;
+  surgeon: string;
+  preOpDiagnosis: string;
+  hnLast3: string; // เช่น "123" → แสดงเป็น HN-xxxx123
+  setReady: boolean; // จัด Set เรียบร้อย ✓
+  chargeWritten: boolean; // เขียน Charge เรียบร้อย ✓
+
+  // Link to operation (หลังจากสร้าง operation record)
+  // เมื่อ link แล้ว ข้อมูล procedureName, surgeon, preOpDiagnosis, hnLast3
+  // จะ pre-fill ใน OR form ให้คนเก็บสถิติโดยอัตโนมัติ
+  operationId?: string;
+
+  // caseStatus — เริ่มต้นที่ pending_or เสมอ อัปเดตตาม flow
+  caseStatus: CaseStatus;
+
+  createdBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// ─── RR Records (link กับ operation) ──────────
+// Path: /rrRecords/{rrId}
+export interface RRRecordDoc {
+  id: string;
+  operationId: string; // FK → operations
+
+  // ── RR Incharge กรอก ──
+  postOpRoute:
+    | "RR"
+    | "ICU_NO_RR"
+    | "ER_CONDITION_RR"
+    | "HOME"
+    | "UNPLANNED_ICU";
+  anesthesiaType: AnesthesiaTypeRR;
+  airway: "ON_ETT_FROM_OR" | "RETUBE_IN_RR" | "NONE";
+  patientLevel: "LEVEL_1" | "LEVEL_2" | "LEVEL_3" | "LEVEL_4";
+
+  // ── ภาวะหลังผ่าตัด ──
+  hasChill: boolean;
+  hasHypothermia: boolean; // <36.0
+  hasHypoxia: boolean;
+
+  // ── Pain scores ──
+  painScoreNRS: number; // 0-10
+  painScoreVRS:
+    | "NO_PAIN"
+    | "MILD"
+    | "MODERATE"
+    | "SEVERE";
+
+  // ── Pre-op pain score (สำหรับ LH&TLH เปรียบเทียบ) ──
+  preOpPainScoreNRS?: number;
+
+  // ── Metadata ──
+  createdBy: string; // RR Incharge uid
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// ─── Committee Indicators ─────────────────────
+// Path: /committeeIndicators/{indicatorId}
+// กรรมการแต่ละคนกรอก per operation
+export interface CommitteeIndicatorDoc {
+  id: string;
+  operationId: string; // FK → operations
+  committeeType: CommitteeType;
+
+  // ── Common indicators (shared across committees) ──
+  foreignBodyRetained?: boolean; // ผ้าซับโลหิต/เครื่องมือตกค้าง
+  woundInfection?: boolean; // การติดเชื้อของแผลผ่าตัด
+  adjacentOrganInjury?: boolean; // บาดเจ็บอวัยวะข้างเคียง
+  preventableIncident?: boolean; // อุบัติการณ์ที่ป้องกันได้
+  preventableIncidentNote?: string;
+
+  // ── C/S specific ──
+  unplannedConsultInOR?: boolean;
+  unplannedICU?: boolean;
+  maternalFetalInjury?: boolean; // บาดเจ็บมารดา/ทารก
+
+  // ── LH&TLH specific ──
+  unplannedConsultInOR_LH?: boolean;
+
+  // ── Hystero specific ──
+  unplannedAdmission?: boolean;
+  fluidOverload?: "<500" | "500-1000" | ">1000";
+
+  // ── CA Cervix / RH specific ──
+  surgeryPostponed?: boolean; // เลื่อน/งดผ่าตัด
+  unplannedConsultInOR_CA?: boolean;
+  transferToICU?: boolean; // ย้าย Observe ICU-OB
+  surgeryType?: string; // TAH / EH / RH / LH etc.
+
+  // ── Ovarian Tumor specific ──
+  tumorType?: string; // ชนิด tumor (กรอกเพิ่ม)
+
+  // ── Metadata ──
+  createdBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export const COMMITTEE_TYPES = [
+  "TAH",
+  "LH_TLH",
+  "CS",
+  "HYSTERO",
+  "CA_CERVIX",
+  "RH",
+  "OVARIAN_TUMOR",
+  "POP",
+] as const;
+export type CommitteeType = (typeof COMMITTEE_TYPES)[number];
+
+// ─── Dropdown Lists (admin-managed) ───────────
+// Path: /dropdownLists/{listName}
+export interface DropdownListDoc {
+  listName: string; // "procedures", "surgeons", "scrubNurses", "circulateNurses", "operatingRooms"
+  items: DropdownItem[];
+  updatedAt: Timestamp;
+  updatedBy: string;
+}
+
+export interface DropdownItem {
+  value: string;
   label: string;
-  type: "boolean" | "text" | "select";
-  options?: { value: string; label: string }[];
-  fromRR?: boolean; // ดึงจาก RR record
+  mainGroup?: MainGroup; // filter procedure by main group
+  isActive: boolean;
+  sortOrder: number;
 }
 
-export interface CommitteeConfig {
-  type: CommitteeType;
-  label: string;
-  labelTH: string;
-  role: Role;
-  href: string;
-  // Which mainGroups to filter operations
-  filterMainGroups?: MainGroup[];
-  // Filter by procedure name pattern
-  filterProcedures?: string[];
-  // Filter by postOpDiagnosis
-  filterPostOpDiagnosis?: string[];
-  // Manually entered indicators
-  manualIndicators: IndicatorField[];
-  // RR-linked indicators (auto from RR data)
-  rrIndicators: IndicatorField[];
-  // Extra fields specific to this committee
-  extraFields?: IndicatorField[];
+// ─── Helper: Pain Score Interpretation ────────
+export interface PainInterpretation {
+  committeeType: CommitteeType;
+  nrs: number;
+  interpretation: string;
 }
 
-export const COMMITTEE_CONFIGS: CommitteeConfig[] = [
-  // ── TAH ──
-  {
-    type: "TAH",
-    label: "TAH",
-    labelTH: "กรรมการ TAH",
-    role: "committee_tah",
-    href: "/committees/tah",
-    filterProcedures: ["TAH"],
-    manualIndicators: [
-      { key: "foreignBodyRetained", label: "อัตราผ้าซับโลหิต/เครื่องมือตกค้างในร่างกาย", type: "boolean" },
-      { key: "woundInfection", label: "อัตราการติดเชื้อของแผลผ่าตัด", type: "boolean" },
-      { key: "adjacentOrganInjury", label: "อัตราการได้รับบาดเจ็บของอวัยวะข้างเคียง", type: "boolean" },
-      { key: "preventableIncident", label: "อุบัติการณ์ที่ป้องกันได้ (เคลื่อนย้าย/จัดท่า/เครื่องจี้ไฟฟ้า)", type: "boolean" },
-    ],
-    rrIndicators: [
-      { key: "hasChill", label: "ภาวะหนาวสั่นหลังผ่าตัด", type: "boolean", fromRR: true },
-      { key: "hasHypothermia", label: "ภาวะอุณหภูมิต่ำหลังผ่าตัด (<36°C)", type: "boolean", fromRR: true },
-      { key: "hasHypoxia", label: "ภาวะ Hypoxia ขณะผ่าตัด", type: "boolean", fromRR: true },
-    ],
-  },
-
-  // ── LH & TLH ──
-  {
-    type: "LH_TLH",
-    label: "LH & TLH",
-    labelTH: "กรรมการ LH & TLH",
-    role: "committee_lh_tlh",
-    href: "/committees/lh-tlh",
-    filterMainGroups: ["LAP_SURG"],
-    manualIndicators: [
-      { key: "foreignBodyRetained", label: "อัตราลืมสิ่งแปลกปลอมในร่างกาย", type: "boolean" },
-      { key: "woundInfection", label: "อัตราการติดเชื้อแผลผ่าตัด", type: "boolean" },
-      { key: "adjacentOrganInjury", label: "การบาดเจ็บอวัยวะข้างเคียง", type: "boolean" },
-      { key: "preventableIncident", label: "อุบัติการณ์ที่ป้องกันได้ (จัดท่า/เคลื่อนย้าย/เครื่องจี้/อุปกรณ์ไฟฟ้า)", type: "boolean" },
-      { key: "unplannedConsultInOR_LH", label: "Unplanned consult in OR", type: "boolean" },
-    ],
-    rrIndicators: [
-      { key: "hasHypoxia", label: "ภาวะ Hypoxia หลังผ่าตัด", type: "boolean", fromRR: true },
-      { key: "hasChill", label: "ภาวะหนาวสั่นหลังผ่าตัด", type: "boolean", fromRR: true },
-      { key: "hasHypothermia", label: "ภาวะอุณหภูมิกายต่ำ (<36.0)", type: "boolean", fromRR: true },
-    ],
-  },
-
-  // ── C/S ──
-  {
-    type: "CS",
-    label: "C/S",
-    labelTH: "กรรมการ C/S",
-    role: "committee_cs",
-    href: "/committees/cs",
-    filterMainGroups: ["OB"],
-    manualIndicators: [
-      { key: "foreignBodyRetained", label: "อัตราการมีผ้าซับโลหิตตกค้าง", type: "boolean" },
-      { key: "woundInfection", label: "อัตราการติดเชื้อของแผลผ่าตัด", type: "boolean" },
-      { key: "maternalFetalInjury", label: "อัตราการได้รับบาดเจ็บของมารดา/ทารก", type: "boolean" },
-      { key: "unplannedConsultInOR", label: "อัตราการ Consult in OR โดยไม่ได้วางแผน", type: "boolean" },
-      { key: "unplannedICU", label: "Unplanned ICU admission", type: "boolean" },
-      { key: "preventableIncident", label: "อุบัติการณ์ที่ป้องกันได้ (จัดท่า/เคลื่อนย้าย/เครื่องจี้/อุปกรณ์ไฟฟ้า)", type: "boolean" },
-    ],
-    rrIndicators: [],
-  },
-
-  // ── Hystero ──
-  {
-    type: "HYSTERO",
-    label: "Hystero",
-    labelTH: "กรรมการ Hystero",
-    role: "committee_hystero",
-    href: "/committees/hystero",
-    filterMainGroups: ["HYSTERO"],
-    manualIndicators: [
-      { key: "adjacentOrganInjury", label: "การบาดเจ็บของอวัยวะข้างเคียง", type: "boolean" },
-      { key: "foreignBodyRetained", label: "อัตราการลืมสิ่งแปลกปลอมในร่างกาย", type: "boolean" },
-      { key: "unplannedAdmission", label: "Unplanned admission", type: "boolean" },
-      {
-        key: "fluidOverload",
-        label: "อัตราน้ำเกินในร่างกายผู้ป่วย",
-        type: "select",
-        options: [
-          { value: "<500", label: "<500 cc" },
-          { value: "500-1000", label: "500-1000 cc" },
-          { value: ">1000", label: ">1000 cc" },
-        ],
-      },
-    ],
-    rrIndicators: [
-      { key: "hasChill", label: "ภาวะหนาวสั่นหลังผ่าตัด", type: "boolean", fromRR: true },
-      { key: "hasHypoxia", label: "อัตราการเกิดภาวะ Hypoxia", type: "boolean", fromRR: true },
-    ],
-  },
-
-  // ── CA Cervix ──
-  {
-    type: "CA_CERVIX",
-    label: "CA Cervix",
-    labelTH: "กรรมการ CA Cervix",
-    role: "committee_ca_cervix",
-    href: "/committees/ca-cervix",
-    filterPostOpDiagnosis: ["CA cervix"],
-    manualIndicators: [
-      { key: "foreignBodyRetained", label: "อัตราการลืมสิ่งแปลกปลอมในร่างกาย", type: "boolean" },
-      { key: "surgeryPostponed", label: "เลื่อน/งดผ่าตัด", type: "boolean" },
-      { key: "woundInfection", label: "การติดเชื้อของแผลผ่าตัด", type: "boolean" },
-      { key: "adjacentOrganInjury", label: "การบาดเจ็บของอวัยวะข้างเคียง", type: "boolean" },
-      { key: "unplannedConsultInOR_CA", label: "Consult in OR โดยไม่ได้วางแผน", type: "boolean" },
-      { key: "preventableIncident", label: "อุบัติเหตุที่ป้องกันได้ (จัดท่า, Burn, อุบัติเหตุ)", type: "boolean" },
-      { key: "transferToICU", label: "ย้าย Observe ICU-OB", type: "boolean" },
-    ],
-    extraFields: [
-      {
-        key: "surgeryType",
-        label: "ประเภทการผ่าตัด",
-        type: "select",
-        options: [
-          { value: "TAH", label: "TAH" },
-          { value: "EH/EHPL", label: "EH/EHPL" },
-          { value: "RH/RHPL", label: "RH/RHPL" },
-          { value: "LH/LRHPL", label: "LH/LRHPL" },
-          { value: "OTHER", label: "อื่นๆ" },
-        ],
-      },
-    ],
-    rrIndicators: [
-      { key: "hasChill", label: "ภาวะหนาวสั่นหลังผ่าตัด", type: "boolean", fromRR: true },
-      { key: "hasHypoxia", label: "อัตราการเกิดภาวะ Hypoxia", type: "boolean", fromRR: true },
-    ],
-  },
-
-  // ── RH ──
-  {
-    type: "RH",
-    label: "RH",
-    labelTH: "กรรมการ RH",
-    role: "committee_rh",
-    href: "/committees/rh",
-    filterProcedures: ["RH", "RHPL"],
-    manualIndicators: [
-      { key: "foreignBodyRetained", label: "อัตราการลืมสิ่งแปลกปลอมในร่างกาย", type: "boolean" },
-      { key: "surgeryPostponed", label: "เลื่อน/งดผ่าตัด", type: "boolean" },
-      { key: "woundInfection", label: "การติดเชื้อของแผลผ่าตัด", type: "boolean" },
-      { key: "adjacentOrganInjury", label: "การบาดเจ็บของอวัยวะข้างเคียง", type: "boolean" },
-      { key: "unplannedConsultInOR_CA", label: "Consult in OR โดยไม่ได้วางแผน", type: "boolean" },
-      { key: "preventableIncident", label: "อุบัติเหตุที่ป้องกันได้ (จัดท่า, Burn, อุบัติเหตุ)", type: "boolean" },
-      { key: "transferToICU", label: "ย้าย Observe ICU-OB", type: "boolean" },
-    ],
-    rrIndicators: [
-      { key: "hasChill", label: "ภาวะหนาวสั่นหลังผ่าตัด", type: "boolean", fromRR: true },
-      { key: "hasHypoxia", label: "อัตราการเกิดภาวะ Hypoxia", type: "boolean", fromRR: true },
-    ],
-  },
-
-  // ── Ovarian Tumor ──
-  {
-    type: "OVARIAN_TUMOR",
-    label: "Ovarian Tumor",
-    labelTH: "กรรมการ Ovarian Tumor",
-    role: "committee_ovarian_tumor",
-    href: "/committees/ovarian-tumor",
-    filterPostOpDiagnosis: ["Ovarian tumor"],
-    manualIndicators: [],
-    extraFields: [
-      { key: "tumorType", label: "ชนิด Tumor (Post-op diagnosis)", type: "text" },
-    ],
-    rrIndicators: [],
-  },
-
-  // ── POP ──
-  {
-    type: "POP",
-    label: "POP",
-    labelTH: "กรรมการ POP",
-    role: "committee_pop",
-    href: "/committees/pop",
-    manualIndicators: [
-      { key: "foreignBodyRetained", label: "อัตราการลืมสิ่งแปลกปลอมในร่างกาย", type: "boolean" },
-      { key: "surgeryPostponed", label: "เลื่อน/งดผ่าตัด", type: "boolean" },
-      { key: "woundInfection", label: "การติดเชื้อของแผลผ่าตัด", type: "boolean" },
-      { key: "adjacentOrganInjury", label: "การบาดเจ็บของอวัยวะข้างเคียง", type: "boolean" },
-      { key: "unplannedConsultInOR_CA", label: "Consult in OR โดยไม่ได้วางแผน", type: "boolean" },
-      { key: "preventableIncident", label: "อุบัติเหตุที่ป้องกันได้ (จัดท่า, Burn, อุบัติเหตุ)", type: "boolean" },
-      { key: "transferToICU", label: "ย้าย Observe ICU-OB", type: "boolean" },
-    ],
-    extraFields: [
-      {
-        key: "surgeryType",
-        label: "ประเภทการผ่าตัด",
-        type: "select",
-        options: [
-          { value: "TAH", label: "TAH" },
-          { value: "EH/EHPL", label: "EH/EHPL" },
-          { value: "RH/RHPL", label: "RH/RHPL" },
-          { value: "LH/LRHPL", label: "LH/LRHPL" },
-          { value: "OTHER", label: "อื่นๆ" },
-        ],
-      },
-    ],
-    rrIndicators: [
-      { key: "hasChill", label: "ภาวะหนาวสั่นหลังผ่าตัด", type: "boolean", fromRR: true },
-      { key: "hasHypoxia", label: "อัตราการเกิดภาวะ Hypoxia", type: "boolean", fromRR: true },
-    ],
-  },
-];
-
-export function getCommitteeConfig(type: CommitteeType): CommitteeConfig | undefined {
-  return COMMITTEE_CONFIGS.find((c) => c.type === type);
+export function interpretPainScore(
+  committeeType: CommitteeType,
+  nrs: number
+): string {
+  switch (committeeType) {
+    case "HYSTERO":
+    case "TAH":
+      return nrs < 5 ? "NRS <5" : "NRS ≥5";
+    case "CS":
+      return nrs <= 5 ? "NRS ≤5 (ผ่าน)" : "NRS >5 (ไม่ผ่าน)";
+    case "CA_CERVIX":
+    case "RH":
+    case "OVARIAN_TUMOR":
+      if (nrs <= 3) return "NRS ≤3";
+      if (nrs <= 5) return "NRS 4-5";
+      return "NRS >5";
+    case "LH_TLH":
+      return "เปรียบเทียบก่อน-หลังผ่าตัด";
+    default:
+      return `NRS ${nrs}`;
+  }
 }
 
-export function getCommitteeConfigBySlug(slug: string): CommitteeConfig | undefined {
-  const slugMap: Record<string, CommitteeType> = {
-    "tah": "TAH",
-    "lh-tlh": "LH_TLH",
-    "cs": "CS",
-    "hystero": "HYSTERO",
-    "ca-cervix": "CA_CERVIX",
-    "rh": "RH",
-    "ovarian-tumor": "OVARIAN_TUMOR",
-    "pop": "POP",
-  };
-  const type = slugMap[slug];
-  return type ? getCommitteeConfig(type) : undefined;
+// ─── Helper: Auto-computed fields ─────────────
+export function computeOperationFlags(op: Partial<OperationDoc>): {
+  isPPH: boolean;
+  isPreterm: boolean;
+  durationMinutes: number;
+} {
+  const isPPH = (op.ebl ?? 0) > 1000;
+  const isPreterm = (op.gestationalAge ?? 40) < 37;
+
+  let durationMinutes = 0;
+  if (op.startTime && op.endTime) {
+    durationMinutes = Math.round(
+      (op.endTime.toMillis() - op.startTime.toMillis()) / 60000
+    );
+  }
+
+  return { isPPH, isPreterm, durationMinutes };
 }
