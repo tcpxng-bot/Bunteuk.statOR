@@ -30,14 +30,13 @@ export default function RRSummaryPage() {
     );
 
     const unsub = onSnapshot(q, async (snap) => {
-      const ops = snap.docs.map((d) => d.data() as OperationDoc);
+      // ดึง id จาก doc reference เสมอ ไม่ใช่จาก data() เพราะเคสเก่าอาจไม่มี id field
+      const ops = snap.docs.map((d) => ({ id: d.id, ...d.data() } as OperationDoc));
       setOperations(ops);
 
-      // Load RR records for these operations
       if (ops.length > 0) {
         const opIds = ops.map((o) => o.id).filter(Boolean);
         if (opIds.length > 0) {
-          // Firestore 'in' limited to 30
           const chunks = [];
           for (let i = 0; i < opIds.length; i += 30) {
             chunks.push(opIds.slice(i, i + 30));
@@ -56,6 +55,8 @@ export default function RRSummaryPage() {
           }
           setRrMap(map);
         }
+      } else {
+        setRrMap(new Map());
       }
 
       setLoading(false);
@@ -90,7 +91,6 @@ export default function RRSummaryPage() {
           </div>
         ) : (
           <>
-            {/* Pending RR */}
             {opsWithoutRR.length > 0 && (
               <div className="mb-8">
                 <h2 className="text-sm font-medium text-amber-700 mb-3 flex items-center gap-2">
@@ -120,7 +120,6 @@ export default function RRSummaryPage() {
               </div>
             )}
 
-            {/* Completed RR */}
             {opsWithRR.length > 0 && (
               <div>
                 <h2 className="text-sm font-medium text-green-700 mb-3 flex items-center gap-2">
