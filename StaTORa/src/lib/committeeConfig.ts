@@ -184,6 +184,21 @@ export const COMMITTEE_CONFIGS: CommitteeConfig[] = [
     ],
   },
 
+  // ── Ovarian Tumor ──
+  {
+    type: "OVARIAN_TUMOR",
+    label: "Ovarian Tumor",
+    labelTH: "กรรมการ Ovarian Tumor",
+    role: "committee_ovarian_tumor",
+    href: "/committees/ovarian-tumor",
+    filterPostOpDiagnosis: ["Ovarian tumor"],
+    manualIndicators: [],
+    extraFields: [
+      { key: "tumorType", label: "ชนิด Tumor (Post-op diagnosis)", type: "text" },
+    ],
+    rrIndicators: [],
+  },
+
   // ── POP ──
   {
     type: "POP",
@@ -191,31 +206,32 @@ export const COMMITTEE_CONFIGS: CommitteeConfig[] = [
     labelTH: "กรรมการ POP",
     role: "committee_pop",
     href: "/committees/pop",
-    filterPostOpDiagnosis: ["POP"],
     manualIndicators: [
-      {
-        key: "procedureCount",
-        label: "จำนวนการผ่าตัด แยกตาม type",
-        type: "select",
-        options: [
-          { value: "LSH", label: "LSH" },
-          { value: "VH_NOTES_BSO", label: "VH c NOTEs / VH c BSO" },
-          { value: "Colpoclesis", label: "Colpoclesis" },
-          { value: "Other", label: "อื่นๆ" },
-        ],
-      },
-      { key: "foreignBodyRetained", label: "อัตราการลืมสิ่งแปลกปลอมตกค้างในร่างกายผู้ป่วย", type: "boolean" },
-      { key: "postponedCancelled", label: "เลื่อน/งด ผ่าตัด", type: "boolean" },
+      { key: "foreignBodyRetained", label: "อัตราการลืมสิ่งแปลกปลอมในร่างกาย", type: "boolean" },
+      { key: "surgeryPostponed", label: "เลื่อน/งดผ่าตัด", type: "boolean" },
       { key: "woundInfection", label: "การติดเชื้อของแผลผ่าตัด", type: "boolean" },
       { key: "adjacentOrganInjury", label: "การบาดเจ็บของอวัยวะข้างเคียง", type: "boolean" },
-      { key: "unplannedConsult", label: "Consult in OR โดยไม่ได้วางแผน", type: "boolean" },
-      { key: "preventableIncident", label: "อุบัติเหตุที่ป้องกันได้ (จัดท่า, Burn, PI, อุบัติเหตุ)", type: "boolean" },
-      { key: "icuObserve", label: "ย้าย Observe ICU-OB", type: "boolean" },
+      { key: "unplannedConsultInOR_CA", label: "Consult in OR โดยไม่ได้วางแผน", type: "boolean" },
+      { key: "preventableIncident", label: "อุบัติเหตุที่ป้องกันได้ (จัดท่า, Burn, อุบัติเหตุ)", type: "boolean" },
+      { key: "transferToICU", label: "ย้าย Observe ICU-OB", type: "boolean" },
+    ],
+    extraFields: [
+      {
+        key: "surgeryType",
+        label: "ประเภทการผ่าตัด",
+        type: "select",
+        options: [
+          { value: "TAH", label: "TAH" },
+          { value: "EH/EHPL", label: "EH/EHPL" },
+          { value: "RH/RHPL", label: "RH/RHPL" },
+          { value: "LH/LRHPL", label: "LH/LRHPL" },
+          { value: "OTHER", label: "อื่นๆ" },
+        ],
+      },
     ],
     rrIndicators: [
-      { key: "chill", label: "ภาวะหนาวสั่นหลังผ่าตัด", type: "boolean", fromRR: true },
-      { key: "hypoxia", label: "อัตราการเกิดภาวะ Hypoxia", type: "boolean", fromRR: true },
-      { key: "painScore", label: "ระดับความเจ็บปวดก่อนจำหน่ายจาก RR (NRS ≤3 / 4-5 / 6-10)", type: "boolean", fromRR: true },
+      { key: "hasChill", label: "ภาวะหนาวสั่นหลังผ่าตัด", type: "boolean", fromRR: true },
+      { key: "hasHypoxia", label: "อัตราการเกิดภาวะ Hypoxia", type: "boolean", fromRR: true },
     ],
   },
 ];
@@ -232,6 +248,7 @@ export function getCommitteeConfigBySlug(slug: string): CommitteeConfig | undefi
     "hystero": "HYSTERO",
     "ca-cervix": "CA_CERVIX",
     "rh": "RH",
+    "ovarian-tumor": "OVARIAN_TUMOR",
     "pop": "POP",
   };
   const type = slugMap[slug];
