@@ -30,6 +30,7 @@ import {
   StatisticianAssignment,
   MainGroup,
   CommitteeType,
+  CaseStatus,
 } from "@/types/database";
 
 // ═══════════════════════════════════════════
@@ -71,11 +72,23 @@ export async function createOperation(
     durationMinutes,
     isPPH,
     isPreterm,
+    // เคสใหม่ที่คนเก็บสถิติกรอก OR form → รอ RR Incharge กรอก RR form
+    caseStatus: "pending_rr" satisfies CaseStatus,
     createdAt: now,
     updatedAt: now,
   });
 
   await updateDoc(ref, { id: ref.id });
+
+  // ถ้ามี preOpCaseId → link กลับและอัปเดต caseStatus ของ preOpCase ด้วย
+  if (data.preOpCaseId) {
+    await updateDoc(doc(db, "preOpCases", data.preOpCaseId), {
+      operationId: ref.id,
+      caseStatus: "pending_rr" satisfies CaseStatus,
+      updatedAt: now,
+    });
+  }
+
   return ref.id;
 }
 
@@ -157,11 +170,13 @@ export function queryOperationsByMainGroup(
 // ═══════════════════════════════════════════
 
 export async function createPreOpCase(
-  data: Omit<PreOpCaseDoc, "id" | "createdAt" | "updatedAt">
+  data: Omit<PreOpCaseDoc, "id" | "createdAt" | "updatedAt" | "caseStatus">
 ): Promise<string> {
   const now = Timestamp.now();
   const ref = await addDoc(collection(db, "preOpCases"), {
     ...data,
+    // หน่วยเปลสร้างเคสใหม่ → เริ่มต้นที่ pending_or เสมอ
+    caseStatus: "pending_or" satisfies CaseStatus,
     createdAt: now,
     updatedAt: now,
   });
@@ -177,6 +192,11 @@ export async function updatePreOpCase(
     ...data,
     updatedAt: Timestamp.now(),
   });
+}
+
+export async function getPreOpCase(id: string): Promise<PreOpCaseDoc | null> {
+  const snap = await getDoc(doc(db, "preOpCases", id));
+  return snap.exists() ? (snap.data() as PreOpCaseDoc) : null;
 }
 
 export function queryPreOpCasesByDate(date: Date): QueryConstraint[] {
@@ -205,6 +225,25 @@ export async function createRRRecord(
     updatedAt: now,
   });
   await updateDoc(ref, { id: ref.id });
+
+  // เมื่อ RR form ครบ → อัปเดต operation เป็น complete (นับเข้าสถิติได้แล้ว)
+  await updateDoc(doc(db, "operations", data.operationId), {
+    caseStatus: "complete" satisfies CaseStatus,
+    updatedAt: now,
+  });
+
+  // อัปเดต preOpCase ด้วย (ถ้ามี) — ดึง operationDoc มาหา preOpCaseId
+  const opSnap = await getDoc(doc(db, "operations", data.operationId));
+  if (opSnap.exists()) {
+    const opData = opSnap.data() as OperationDoc;
+    if (opData.preOpCaseId) {
+      await updateDoc(doc(db, "preOpCases", opData.preOpCaseId), {
+        caseStatus: "complete" satisfies CaseStatus,
+        updatedAt: now,
+      });
+    }
+  }
+
   return ref.id;
 }
 
@@ -369,29 +408,4 @@ export function subscribeToPreOpCasesByDate(
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => d.data() as PreOpCaseDoc));
   });
-}
-
-export async function deleteOperation(id: string): Promise<void> {
-  await deleteDoc(doc(db, "operations", id));
-}
-
-export async function checkDuplicateOperation(
-  operationDate: Date,
-  procedureName: string,
-  surgeon: string
-): Promise<boolean> {
-  const start = new Date(operationDate);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(operationDate);
-  end.setHours(23, 59, 59, 999);
-
-  const q = query(
-    collection(db, "operations"),
-    where("operationDate", ">=", Timestamp.fromDate(start)),
-    where("operationDate", "<=", Timestamp.fromDate(end)),
-    where("procedureName", "==", procedureName),
-    where("surgeon", "==", surgeon)
-  );
-  const snap = await getDocs(q);
-  return !snap.empty;
 }
