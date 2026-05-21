@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
-import { getOperation, updateOperation, getRRRecordByOperationId } from "@/lib/firestore";
+import { getOperation, updateOperation, getRRRecordByOperationId, deleteOperation } from "@/lib/firestore";
 import { OperationDoc, RRRecordDoc } from "@/types/database";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -39,6 +39,8 @@ export default function OperationDetailPage() {
   const [op, setOp] = useState<OperationDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [rr, setRr] = useState<RRRecordDoc | null>(null);
 
   useEffect(() => {
@@ -56,6 +58,19 @@ export default function OperationDetailPage() {
     await updateOperation(op.id, { status: "confirmed" });
     setOp((prev) => prev ? { ...prev, status: "confirmed" } : prev);
     setConfirming(false);
+  }
+
+  async function handleDelete() {
+    if (!op) return;
+    setDeleting(true);
+    try {
+      await deleteOperation(op.id);
+      router.replace("/");
+    } catch (err) {
+      console.error(err);
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
   }
 
   if (loading) {
@@ -234,7 +249,40 @@ export default function OperationDetailPage() {
             >
               ✎ แก้ไข
             </button>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="rounded-xl border border-red-200 text-red-600 px-4 py-3 text-sm font-medium hover:bg-red-50 transition-colors"
+            >
+              ลบ
+            </button>
           </div>
+
+          {/* Delete confirm dialog */}
+          {showDeleteConfirm && (
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+                <h3 className="font-medium text-gray-900 mb-2">ลบเคสนี้?</h3>
+                <p className="text-sm text-gray-500 mb-1">{op.procedureName}</p>
+                <p className="text-sm text-gray-400 mb-6">{formatDateTime(op.operationDate)}</p>
+                <p className="text-xs text-red-500 mb-6">การลบไม่สามารถย้อนกลับได้</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="flex-1 rounded-xl bg-red-500 text-white py-2.5 text-sm font-medium hover:bg-red-600 disabled:opacity-60 transition-colors"
+                  >
+                    {deleting ? "กำลังลบ..." : "ลบเคสนี้"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </AppShell>
