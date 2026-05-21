@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, FormEvent } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp, deleteField } from "firebase/firestore";
 import { AppShell } from "@/components/AppShell";
 import { Field, Select, TextInput, Toggle, PillSelect, Textarea } from "@/components/FormFields";
 import { useAuth } from "@/contexts/AuthContext";
@@ -222,13 +222,13 @@ export default function EditOperationPage() {
         complicationTypes: form.hasComplication ? form.complicationTypes : [],
         complicationNote: form.complicationNote,
 
-        postOpDiagnosis: (effectivePostOpDiagnosis || undefined) as DiagnosisGroup | undefined,
-        gender: (form.gender || undefined) as Gender | undefined,
-        ageRange: (form.ageRange || undefined) as AgeRange | undefined,
-        asaClass: (form.asaClass || undefined) as ASAClass | undefined,
-        operatingRoom: form.operatingRoom || undefined,
-        scrubNurse: form.scrubNurse || undefined,
-        circulateNurse: form.circulateNurse || undefined,
+        postOpDiagnosis: effectivePostOpDiagnosis || deleteField() as any,
+        gender: form.gender || deleteField() as any,
+        ageRange: form.ageRange || deleteField() as any,
+        asaClass: form.asaClass || deleteField() as any,
+        operatingRoom: form.operatingRoom || deleteField() as any,
+        scrubNurse: form.scrubNurse || deleteField() as any,
+        circulateNurse: form.circulateNurse || deleteField() as any,
 
         ...(isOB && form.ebl && { ebl: parseInt(form.ebl) }),
         ...(isOB && form.gestationalAge && { gestationalAge: parseFloat(form.gestationalAge) }),
