@@ -174,32 +174,13 @@ export function computeCommitteeSummary(rows: CommitteeDataRow[], config: Commit
   const withIndicators = rows.filter((r) => r.indicator !== null).length;
   const withRR = rows.filter((r) => r.rr !== null).length;
 
-  // Mapping: indicator key → complication type ที่ดึงจาก OR auto
-  const COMPLICATION_AUTO_MAP: Record<string, string> = {
-    adjacentOrganInjury: "ADJACENT_ORGAN_INJURY",
-    foreignBodyRetained: "FOREIGN_BODY_RETAINED",
-    woundInfection: "WOUND_INFECTION",
-    preventableIncident: "PREVENTABLE_INCIDENT",
-    unplannedAdmission: "UNPLANNED_ADMISSION",
-    icuObserve: "UNPLANNED_ICU",
-  };
-
-  // Count positive indicators (manual + auto from complicationTypes)
+  // Count positive indicators
   const indicatorCounts: Record<string, number> = {};
   for (const field of [...config.manualIndicators, ...(config.extraFields || [])]) {
     if (field.type === "boolean") {
-      const autoComp = COMPLICATION_AUTO_MAP[field.key];
-      indicatorCounts[field.key] = rows.filter((r) => {
-        // Manual check
-        if (r.indicator && (r.indicator as any)[field.key] === true) return true;
-        // Auto from OR complicationTypes
-        if (autoComp && r.operation.complicationTypes?.includes(autoComp as any)) return true;
-        // Auto for "postponedCancelled" from preOpCase (if linked) — POP only
-        if (field.key === "postponedCancelled" && r.operation.preOpCaseId) {
-          // Would need to fetch preOpCase, but for now skip
-        }
-        return false;
-      }).length;
+      indicatorCounts[field.key] = rows.filter(
+        (r) => r.indicator && (r.indicator as any)[field.key] === true
+      ).length;
     }
   }
 
