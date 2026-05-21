@@ -174,6 +174,14 @@ export interface PreOpCaseDoc {
   setReady: boolean; // จัด Set เรียบร้อย ✓
   chargeWritten: boolean; // เขียน Charge เรียบร้อย ✓
 
+  // ── Optional fields จากหน่วยเปล ──
+  planConsultUro?: boolean;     // Plan consult Urology
+  planConsultColo?: boolean;    // Plan consult Colorectal
+
+  // ผลการผ่าตัด (หน่วยเปลอัปเดตหลังผ่าตัด)
+  surgeryStatus?: "success" | "postponed" | "cancelled";
+  surgeryStatusNote?: string;
+
   // Link to operation (หลังจากสร้าง operation record)
   // เมื่อ link แล้ว ข้อมูล procedureName, surgeon, preOpDiagnosis, hnLast3
   // จะ pre-fill ใน OR form ให้คนเก็บสถิติโดยอัตโนมัติ
