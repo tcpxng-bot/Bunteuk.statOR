@@ -17,6 +17,8 @@ import {
   ASA_CLASSES,
   AGE_RANGES,
   GENDER_OPTIONS,
+  COMPLICATION_TYPES,
+  COMPLICATION_LABELS,
   MainGroup,
   Urgency,
   AnesthesiaTypeOR,
@@ -24,6 +26,7 @@ import {
   ASAClass,
   AgeRange,
   Gender,
+  ComplicationType,
   OperationDoc,
 } from "@/types/database";
 
@@ -32,14 +35,21 @@ interface ORFormState {
   mainGroup: MainGroup | "";
   urgency: Urgency | "";
   procedureName: string;
+  procedureNameCustom: string; // พิมพ์เอง
+  useCustomProcedure: boolean;
   diagnosisGroup: DiagnosisGroup | "";
+  diagnosisGroupCustom: string;
+  useCustomDiagnosis: boolean;
+  postOpDiagnosis: DiagnosisGroup | "";
+  postOpDiagnosisCustom: string;
+  useCustomPostOpDiagnosis: boolean;
   surgeon: string;
   startTime: string;
   endTime: string;
   anesthesiaType: AnesthesiaTypeOR | "";
   hasComplication: boolean;
+  complicationTypes: ComplicationType[];
   complicationNote: string;
-  postOpDiagnosis: DiagnosisGroup | "";
   gender: Gender | "";
   ageRange: AgeRange | "";
   asaClass: ASAClass | "";
@@ -61,19 +71,28 @@ function toTimeString(ts: any): string {
 }
 
 function opDocToForm(op: OperationDoc): ORFormState {
+  const isDiagKnown = DIAGNOSIS_GROUPS.includes(op.diagnosisGroup as any);
+  const isPostOpKnown = op.postOpDiagnosis ? DIAGNOSIS_GROUPS.includes(op.postOpDiagnosis as any) : true;
   return {
     operationDate: op.operationDate.toDate().toISOString().split("T")[0],
     mainGroup: op.mainGroup,
     urgency: op.urgency,
     procedureName: op.procedureName,
-    diagnosisGroup: op.diagnosisGroup,
+    procedureNameCustom: op.procedureName,
+    useCustomProcedure: false,
+    diagnosisGroup: isDiagKnown ? op.diagnosisGroup : "",
+    diagnosisGroupCustom: isDiagKnown ? "" : op.diagnosisGroup,
+    useCustomDiagnosis: !isDiagKnown,
+    postOpDiagnosis: isPostOpKnown ? (op.postOpDiagnosis || "") : "",
+    postOpDiagnosisCustom: isPostOpKnown ? "" : (op.postOpDiagnosis || ""),
+    useCustomPostOpDiagnosis: !isPostOpKnown,
     surgeon: op.surgeon,
     startTime: toTimeString(op.startTime),
     endTime: toTimeString(op.endTime),
     anesthesiaType: op.anesthesiaType,
     hasComplication: op.hasComplication,
+    complicationTypes: op.complicationTypes || [],
     complicationNote: op.complicationNote || "",
-    postOpDiagnosis: op.postOpDiagnosis || "",
     gender: op.gender || "",
     ageRange: op.ageRange || "",
     asaClass: op.asaClass || "",
@@ -102,15 +121,10 @@ export default function EditOperationPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saveMsg, setSaveMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Load existing operation
   useEffect(() => {
     if (!operationId) return;
     getOperation(operationId).then((op) => {
-      if (!op) {
-        setSaveMsg({ type: "error", text: "ไม่พบข้อมูลเคสนี้" });
-        setLoadingOp(false);
-        return;
-      }
+      if (!op) { setSaveMsg({ type: "error", text: "ไม่พบข้อมูลเคสนี้" }); setLoadingOp(false); return; }
       setOriginalOp(op);
       setForm(opDocToForm(op));
       setLoadingOp(false);
@@ -118,16 +132,11 @@ export default function EditOperationPage() {
   }, [operationId]);
 
   const { procedures } = useProceduresByMainGroup((form?.mainGroup as MainGroup) || null);
-
-  // ถ้า procedureName เดิมไม่อยู่ใน dropdown ให้เพิ่มเข้าไปชั่วคราว
   const proceduresWithCurrent = useMemo(() => {
     if (!form?.procedureName) return procedures;
     const exists = procedures.some((p) => p.value === form.procedureName);
     if (exists) return procedures;
-    return [
-      { value: form.procedureName, label: form.procedureName, isActive: true, sortOrder: -1 },
-      ...procedures,
-    ];
+    return [{ value: form.procedureName, label: form.procedureName, isActive: true, sortOrder: -1 }, ...procedures];
   }, [procedures, form?.procedureName]);
 
   const { items: surgeons } = useDropdownList("surgeons");
@@ -152,10 +161,22 @@ export default function EditOperationPage() {
     if (errors[key]) setErrors((prev) => { const n = { ...prev }; delete n[key]; return n; });
   };
 
+  const toggleComplicationType = (type: ComplicationType) => {
+    if (!form) return;
+    const current = form.complicationTypes;
+    const next = current.includes(type) ? current.filter((t) => t !== type) : [...current, type];
+    set("complicationTypes", next);
+  };
+
   const handleMainGroupChange = (val: string) => {
     set("mainGroup", val as MainGroup);
-    set("procedureName", "");
+    if (!form?.useCustomProcedure) set("procedureName", "");
   };
+
+  // Effective values (custom or dropdown)
+  const effectiveProcedure = form?.useCustomProcedure ? form.procedureNameCustom : form?.procedureName || "";
+  const effectiveDiagnosis = form?.useCustomDiagnosis ? form.diagnosisGroupCustom : form?.diagnosisGroup || "";
+  const effectivePostOpDiagnosis = form?.useCustomPostOpDiagnosis ? form.postOpDiagnosisCustom : form?.postOpDiagnosis || "";
 
   const validate = (): boolean => {
     if (!form) return false;
@@ -163,13 +184,13 @@ export default function EditOperationPage() {
     if (!form.operationDate) errs.operationDate = "กรุณาเลือกวันที่";
     if (!form.mainGroup) errs.mainGroup = "กรุณาเลือก Main Group";
     if (!form.urgency) errs.urgency = "กรุณาเลือกประเภท";
-    if (!form.procedureName) errs.procedureName = "กรุณาเลือกหัตถการ";
-    if (!form.diagnosisGroup) errs.diagnosisGroup = "กรุณาเลือก Diagnosis";
+    if (!effectiveProcedure) errs.procedureName = "กรุณาระบุหัตถการ";
+    if (!effectiveDiagnosis) errs.diagnosisGroup = "กรุณาระบุ Diagnosis";
     if (!form.surgeon) errs.surgeon = "กรุณาเลือกแพทย์ผ่าตัด";
     if (!form.startTime) errs.startTime = "กรุณาระบุเวลาเริ่ม";
     if (!form.endTime) errs.endTime = "กรุณาระบุเวลาสิ้นสุด";
     if (!form.anesthesiaType) errs.anesthesiaType = "กรุณาเลือกวิธีระงับความรู้สึก";
-    if (form.hasComplication && !form.complicationNote.trim()) errs.complicationNote = "กรุณาระบุรายละเอียด complication";
+    if (form.hasComplication && form.complicationTypes.length === 0) errs.complicationTypes = "กรุณาเลือกประเภท complication";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -177,7 +198,6 @@ export default function EditOperationPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!form || !validate()) return;
-
     setSaving(true);
     setSaveMsg(null);
 
@@ -192,16 +212,17 @@ export default function EditOperationPage() {
         operationDate: Timestamp.fromDate(opDate),
         mainGroup: form.mainGroup as MainGroup,
         urgency: form.urgency as Urgency,
-        procedureName: form.procedureName,
-        diagnosisGroup: form.diagnosisGroup as DiagnosisGroup,
+        procedureName: effectiveProcedure,
+        diagnosisGroup: effectiveDiagnosis as DiagnosisGroup,
         surgeon: form.surgeon,
         startTime: Timestamp.fromDate(startDate),
         endTime: Timestamp.fromDate(endDate),
         anesthesiaType: form.anesthesiaType as AnesthesiaTypeOR,
         hasComplication: form.hasComplication,
+        complicationTypes: form.hasComplication ? form.complicationTypes : [],
         complicationNote: form.complicationNote,
 
-        postOpDiagnosis: (form.postOpDiagnosis || undefined) as DiagnosisGroup | undefined,
+        postOpDiagnosis: (effectivePostOpDiagnosis || undefined) as DiagnosisGroup | undefined,
         gender: (form.gender || undefined) as Gender | undefined,
         ageRange: (form.ageRange || undefined) as AgeRange | undefined,
         asaClass: (form.asaClass || undefined) as ASAClass | undefined,
@@ -212,10 +233,8 @@ export default function EditOperationPage() {
         ...(isOB && form.ebl && { ebl: parseInt(form.ebl) }),
         ...(isOB && form.gestationalAge && { gestationalAge: parseFloat(form.gestationalAge) }),
         ...(isOB && { unplannedICU: form.unplannedICU }),
-
         ...(isHystero && form.fluidBalance && { fluidBalance: form.fluidBalance as "<500" | "500-1000" | ">1000" }),
         ...(isHystero && { unplannedAdmission: form.unplannedAdmission }),
-
         ...(isNotes && { isNotesAssistHysterectomy: form.isNotesAssistHysterectomy }),
       });
 
@@ -228,33 +247,23 @@ export default function EditOperationPage() {
     }
   };
 
-  if (loadingOp) {
-    return (
-      <AppShell requiredRoles={["statistician", "super_admin"]}>
-        <div className="flex justify-center py-24">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-500 border-t-transparent" />
-        </div>
-      </AppShell>
-    );
-  }
+  if (loadingOp) return (
+    <AppShell requiredRoles={["statistician", "super_admin"]}>
+      <div className="flex justify-center py-24"><div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-500 border-t-transparent" /></div>
+    </AppShell>
+  );
 
-  if (!form) {
-    return (
-      <AppShell requiredRoles={["statistician", "super_admin"]}>
-        <div className="px-4 py-8 text-center text-sm text-gray-500">ไม่พบข้อมูลเคสนี้</div>
-      </AppShell>
-    );
-  }
+  if (!form) return (
+    <AppShell requiredRoles={["statistician", "super_admin"]}>
+      <div className="px-4 py-8 text-center text-sm text-gray-500">ไม่พบข้อมูลเคสนี้</div>
+    </AppShell>
+  );
 
   return (
     <AppShell requiredRoles={["statistician", "super_admin"]}>
       <div className="px-4 lg:px-8 py-6 lg:py-8 max-w-3xl">
-        {/* Header */}
         <div className="flex items-center gap-3 mb-1">
-          <button
-            onClick={() => router.back()}
-            className="rounded-lg p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-          >
+          <button onClick={() => router.back()} className="rounded-lg p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
           </button>
           <h1 className="text-xl font-medium text-gray-900 tracking-tight">แก้ไข Operation</h1>
@@ -274,27 +283,86 @@ export default function EditOperationPage() {
                 <Select value={form.operatingRoom} onChange={(v) => set("operatingRoom", v)} options={operatingRooms.map((r) => ({ value: r.value, label: r.label }))} placeholder="เลือกห้อง" />
               </Field>
             </div>
+
             <Field label="Main Group" required error={errors.mainGroup}>
               <PillSelect value={form.mainGroup} onChange={handleMainGroupChange} options={MAIN_GROUPS.map((g) => ({ value: g, label: g }))} />
             </Field>
+
             <Field label="ประเภท" required error={errors.urgency}>
               <PillSelect value={form.urgency} onChange={(v) => set("urgency", v as Urgency)} options={URGENCY_TYPES.map((u) => ({ value: u, label: u }))} />
             </Field>
+
+            {/* หัตถการ — dropdown + พิมพ์เอง */}
             <Field label="หัตถการ" required error={errors.procedureName}>
-              <Select value={form.procedureName} onChange={(v) => set("procedureName", v)} options={proceduresWithCurrent.map((p) => ({ value: p.value, label: p.label }))} placeholder={form.mainGroup ? "เลือกหัตถการ" : "เลือก Main Group ก่อน"} disabled={!form.mainGroup} />
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <button type="button" onClick={() => set("useCustomProcedure", false)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${!form.useCustomProcedure ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                    เลือกจาก list
+                  </button>
+                  <button type="button" onClick={() => set("useCustomProcedure", true)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${form.useCustomProcedure ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                    พิมพ์เอง
+                  </button>
+                </div>
+                {form.useCustomProcedure ? (
+                  <TextInput value={form.procedureNameCustom} onChange={(v) => set("procedureNameCustom", v)} placeholder="ระบุหัตถการ..." />
+                ) : (
+                  <Select value={form.procedureName} onChange={(v) => set("procedureName", v)}
+                    options={proceduresWithCurrent.map((p) => ({ value: p.value, label: p.label }))}
+                    placeholder={form.mainGroup ? "เลือกหัตถการ" : "เลือก Main Group ก่อน"}
+                    disabled={!form.mainGroup} />
+                )}
+              </div>
             </Field>
           </Section>
 
           {/* Section 2: ผู้ป่วย & ทีม */}
           <Section title="ข้อมูลผู้ป่วย & ทีมผ่าตัด">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Pre-op Diagnosis" required error={errors.diagnosisGroup}>
-                <Select value={form.diagnosisGroup} onChange={(v) => set("diagnosisGroup", v as DiagnosisGroup)} options={DIAGNOSIS_GROUPS.map((d) => ({ value: d, label: d }))} placeholder="เลือก Diagnosis" />
-              </Field>
-              <Field label="Post-op Diagnosis">
-                <Select value={form.postOpDiagnosis} onChange={(v) => set("postOpDiagnosis", v as DiagnosisGroup | "")} options={[{ value: "", label: "—" }, ...DIAGNOSIS_GROUPS.map((d) => ({ value: d, label: d }))]} />
-              </Field>
-            </div>
+            {/* Pre-op Diagnosis */}
+            <Field label="Pre-op Diagnosis" required error={errors.diagnosisGroup}>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <button type="button" onClick={() => set("useCustomDiagnosis", false)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${!form.useCustomDiagnosis ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                    เลือกจาก list
+                  </button>
+                  <button type="button" onClick={() => set("useCustomDiagnosis", true)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${form.useCustomDiagnosis ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                    พิมพ์เอง
+                  </button>
+                </div>
+                {form.useCustomDiagnosis ? (
+                  <TextInput value={form.diagnosisGroupCustom} onChange={(v) => set("diagnosisGroupCustom", v)} placeholder="ระบุ diagnosis..." />
+                ) : (
+                  <Select value={form.diagnosisGroup} onChange={(v) => set("diagnosisGroup", v as DiagnosisGroup)}
+                    options={DIAGNOSIS_GROUPS.map((d) => ({ value: d, label: d }))} placeholder="เลือก Diagnosis" />
+                )}
+              </div>
+            </Field>
+
+            {/* Post-op Diagnosis */}
+            <Field label="Post-op Diagnosis">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <button type="button" onClick={() => set("useCustomPostOpDiagnosis", false)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${!form.useCustomPostOpDiagnosis ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                    เลือกจาก list
+                  </button>
+                  <button type="button" onClick={() => set("useCustomPostOpDiagnosis", true)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${form.useCustomPostOpDiagnosis ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                    พิมพ์เอง
+                  </button>
+                </div>
+                {form.useCustomPostOpDiagnosis ? (
+                  <TextInput value={form.postOpDiagnosisCustom} onChange={(v) => set("postOpDiagnosisCustom", v)} placeholder="ระบุ post-op diagnosis..." />
+                ) : (
+                  <Select value={form.postOpDiagnosis} onChange={(v) => set("postOpDiagnosis", v as DiagnosisGroup | "")}
+                    options={[{ value: "", label: "—" }, ...DIAGNOSIS_GROUPS.map((d) => ({ value: d, label: d }))]} />
+                )}
+              </div>
+            </Field>
+
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <Field label="เพศ">
                 <Select value={form.gender} onChange={(v) => set("gender", v as Gender | "")} options={[{ value: "", label: "—" }, ...GENDER_OPTIONS.map((g) => ({ value: g, label: g }))]} />
@@ -306,9 +374,11 @@ export default function EditOperationPage() {
                 <Select value={form.asaClass} onChange={(v) => set("asaClass", v as ASAClass | "")} options={[{ value: "", label: "—" }, ...ASA_CLASSES.map((a) => ({ value: a, label: `ASA ${a}` }))]} />
               </Field>
             </div>
+
             <Field label="แพทย์ผ่าตัด" required error={errors.surgeon}>
               <Select value={form.surgeon} onChange={(v) => set("surgeon", v)} options={surgeons.map((s) => ({ value: s.value, label: s.label }))} placeholder="เลือกแพทย์" />
             </Field>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Scrub Nurse">
                 <Select value={form.scrubNurse} onChange={(v) => set("scrubNurse", v)} options={[{ value: "", label: "—" }, ...scrubNurses.map((s) => ({ value: s.value, label: s.label }))]} />
@@ -344,11 +414,34 @@ export default function EditOperationPage() {
 
           {/* Section 4: Complication */}
           <Section title="Complication">
-            <Toggle checked={form.hasComplication} onChange={(v) => set("hasComplication", v)} label="มี Complication" description="ระบุหากมีภาวะแทรกซ้อนระหว่าง/หลังผ่าตัด" />
+            <Toggle checked={form.hasComplication} onChange={(v) => set("hasComplication", v)}
+              label="มี Complication" description="ถ้าไม่ติ๊ก = ไม่มีภาวะแทรกซ้อน → ส่งข้อมูลไปกรรมการได้เลย" />
+
             {form.hasComplication && (
-              <Field label="รายละเอียด Complication" required error={errors.complicationNote}>
-                <Textarea value={form.complicationNote} onChange={(v) => set("complicationNote", v)} placeholder="ระบุรายละเอียด..." rows={3} />
-              </Field>
+              <>
+                <Field label="ประเภท Complication" required error={errors.complicationTypes}>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {COMPLICATION_TYPES.map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => toggleComplicationType(type)}
+                        className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                          form.complicationTypes.includes(type)
+                            ? "bg-red-500 text-white"
+                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        }`}
+                      >
+                        {COMPLICATION_LABELS[type]}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+
+                <Field label="รายละเอียดเพิ่มเติม">
+                  <Textarea value={form.complicationNote} onChange={(v) => set("complicationNote", v)} placeholder="ระบุรายละเอียด..." rows={3} />
+                </Field>
+              </>
             )}
           </Section>
 
@@ -358,15 +451,11 @@ export default function EditOperationPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="EBL (cc)" hint="≥1000 cc = PPH">
                   <TextInput type="number" value={form.ebl} onChange={(v) => set("ebl", v)} placeholder="0" min={0} />
-                  {form.ebl && parseInt(form.ebl) >= 1000 && (
-                    <span className="mt-1 inline-block rounded-full bg-red-50 px-2.5 py-0.5 text-xs text-red-600 font-medium">PPH</span>
-                  )}
+                  {form.ebl && parseInt(form.ebl) >= 1000 && <span className="mt-1 inline-block rounded-full bg-red-50 px-2.5 py-0.5 text-xs text-red-600 font-medium">PPH</span>}
                 </Field>
                 <Field label="Gestational Age (weeks)" hint="<37 weeks = Preterm">
                   <TextInput type="number" value={form.gestationalAge} onChange={(v) => set("gestationalAge", v)} placeholder="40" min={20} max={44} step={0.1} />
-                  {form.gestationalAge && parseFloat(form.gestationalAge) < 37 && (
-                    <span className="mt-1 inline-block rounded-full bg-amber-50 px-2.5 py-0.5 text-xs text-amber-700 font-medium">Preterm</span>
-                  )}
+                  {form.gestationalAge && parseFloat(form.gestationalAge) < 37 && <span className="mt-1 inline-block rounded-full bg-amber-50 px-2.5 py-0.5 text-xs text-amber-700 font-medium">Preterm</span>}
                 </Field>
               </div>
               <Toggle checked={form.unplannedICU} onChange={(v) => set("unplannedICU", v)} label="Unplanned ICU admission" />
@@ -377,7 +466,8 @@ export default function EditOperationPage() {
           {isHystero && (
             <Section title="ข้อมูลเฉพาะ Hysteroscopy" accent="purple">
               <Field label="Fluid Balance (cc)">
-                <PillSelect value={form.fluidBalance} onChange={(v) => set("fluidBalance", v as ORFormState["fluidBalance"])} options={[{ value: "<500", label: "<500 cc" }, { value: "500-1000", label: "500-1000 cc" }, { value: ">1000", label: ">1000 cc" }]} />
+                <PillSelect value={form.fluidBalance} onChange={(v) => set("fluidBalance", v as ORFormState["fluidBalance"])}
+                  options={[{ value: "<500", label: "<500 cc" }, { value: "500-1000", label: "500-1000 cc" }, { value: ">1000", label: ">1000 cc" }]} />
               </Field>
               <Toggle checked={form.unplannedAdmission} onChange={(v) => set("unplannedAdmission", v)} label="Unplanned admission" description="รับเข้า admit โดยไม่ได้วางแผน" />
             </Section>
@@ -390,7 +480,6 @@ export default function EditOperationPage() {
             </Section>
           )}
 
-          {/* Save message */}
           {saveMsg && (
             <div className={`rounded-xl px-4 py-3 text-sm ${saveMsg.type === "success" ? "bg-green-50 border border-green-100 text-green-700" : "bg-red-50 border border-red-100 text-red-700"}`}>
               {saveMsg.text}
@@ -398,18 +487,12 @@ export default function EditOperationPage() {
           )}
 
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-6 py-3.5 text-sm font-medium text-white hover:bg-teal-700 active:scale-[0.98] disabled:opacity-60 transition-all"
-            >
-              {saving ? (
-                <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />กำลังบันทึก...</>
-              ) : (
-                <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>บันทึกการแก้ไข</>
-              )}
+            <button type="submit" disabled={saving}
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-6 py-3.5 text-sm font-medium text-white hover:bg-teal-700 active:scale-[0.98] disabled:opacity-60 transition-all">
+              {saving ? <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />กำลังบันทึก...</> : <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>บันทึกการแก้ไข</>}
             </button>
-            <button type="button" onClick={() => router.back()} className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-6 py-3.5 text-sm font-medium text-gray-600 hover:bg-gray-50 active:scale-[0.98] transition-all">
+            <button type="button" onClick={() => router.back()}
+              className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-6 py-3.5 text-sm font-medium text-gray-600 hover:bg-gray-50 active:scale-[0.98] transition-all">
               ยกเลิก
             </button>
           </div>
