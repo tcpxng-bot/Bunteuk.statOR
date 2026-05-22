@@ -200,6 +200,7 @@ export interface PreOpCaseDoc {
   chargeWritten: boolean; // เขียน Charge เรียบร้อย ✓
 
   // ── Optional fields จากหน่วยเปล ──
+  patientType?: "OPD" | "IPD";  // ประเภทผู้ป่วย
   planConsultUro?: boolean;     // Plan consult Urology
   planConsultColo?: boolean;    // Plan consult Colorectal
 
