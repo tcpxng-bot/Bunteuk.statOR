@@ -42,6 +42,14 @@ interface ORFormState {
   hasComplication: boolean;
   complicationNote: string;
 
+  // Custom input toggles
+  useCustomProcedure: boolean;
+  procedureNameCustom: string;
+  useCustomDiagnosis: boolean;
+  diagnosisGroupCustom: string;
+  useCustomPostOpDiagnosis: boolean;
+  postOpDiagnosisCustom: string;
+
   // Optional
   postOpDiagnosis: DiagnosisGroup | "";
   gender: Gender | "";
@@ -76,6 +84,12 @@ const INITIAL_STATE: ORFormState = {
   anesthesiaType: "",
   hasComplication: false,
   complicationNote: "",
+  useCustomProcedure: false,
+  procedureNameCustom: "",
+  useCustomDiagnosis: false,
+  diagnosisGroupCustom: "",
+  useCustomPostOpDiagnosis: false,
+  postOpDiagnosisCustom: "",
   postOpDiagnosis: "",
   gender: "",
   ageRange: "",
@@ -158,14 +172,19 @@ function NewOperationForm() {
     set("procedureName", "");
   };
 
+  // Effective values
+  const effectiveProcedure = form.useCustomProcedure ? form.procedureNameCustom : form.procedureName;
+  const effectiveDiagnosis = form.useCustomDiagnosis ? form.diagnosisGroupCustom : form.diagnosisGroup;
+  const effectivePostOpDiagnosis = form.useCustomPostOpDiagnosis ? form.postOpDiagnosisCustom : form.postOpDiagnosis;
+
   // Validate
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
     if (!form.operationDate) errs.operationDate = "กรุณาเลือกวันที่";
     if (!form.mainGroup) errs.mainGroup = "กรุณาเลือก Main Group";
     if (!form.urgency) errs.urgency = "กรุณาเลือกประเภท";
-    if (!form.procedureName) errs.procedureName = "กรุณาเลือกหัตถการ";
-    if (!form.diagnosisGroup) errs.diagnosisGroup = "กรุณาเลือก Diagnosis";
+    if (!effectiveProcedure) errs.procedureName = "กรุณาระบุหัตถการ";
+    if (!effectiveDiagnosis) errs.diagnosisGroup = "กรุณาระบุ Diagnosis";
     if (!form.surgeon) errs.surgeon = "กรุณาเลือกแพทย์ผ่าตัด";
     if (!form.startTime) errs.startTime = "กรุณาระบุเวลาเริ่ม";
     if (!form.endTime) errs.endTime = "กรุณาระบุเวลาสิ้นสุด";
@@ -199,8 +218,8 @@ function NewOperationForm() {
         operationDate: Timestamp.fromDate(opDate),
         mainGroup: form.mainGroup as MainGroup,
         urgency: (form.urgency || "Elective") as Urgency,
-        procedureName: form.procedureName,
-        diagnosisGroup: (form.diagnosisGroup || "Benign") as DiagnosisGroup,
+        procedureName: effectiveProcedure,
+        diagnosisGroup: (effectiveDiagnosis || "Benign") as DiagnosisGroup,
         surgeon: form.surgeon,
         startTime: Timestamp.fromDate(startDate),
         endTime: Timestamp.fromDate(endDate),
@@ -209,7 +228,7 @@ function NewOperationForm() {
         complicationNote: form.complicationNote,
 
         // Optional
-        ...(form.postOpDiagnosis && { postOpDiagnosis: form.postOpDiagnosis as DiagnosisGroup }),
+        ...(effectivePostOpDiagnosis && { postOpDiagnosis: effectivePostOpDiagnosis as DiagnosisGroup }),
         ...(form.gender && { gender: form.gender as Gender }),
         ...(form.ageRange && { ageRange: form.ageRange as AgeRange }),
         ...(form.asaClass && { asaClass: form.asaClass as ASAClass }),
@@ -301,13 +320,26 @@ function NewOperationForm() {
             </Field>
 
             <Field label="หัตถการ" required error={errors.procedureName}>
-              <Select
-                value={form.procedureName}
-                onChange={(v) => set("procedureName", v)}
-                options={procedures.map((p) => ({ value: p.value, label: p.label }))}
-                placeholder={form.mainGroup ? "เลือกหัตถการ" : "เลือก Main Group ก่อน"}
-                disabled={!form.mainGroup}
-              />
+              <div className="space-y-2">
+                <div className="flex gap-2 mb-1">
+                  <button type="button" onClick={() => set("useCustomProcedure", false)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${!form.useCustomProcedure ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                    เลือกจาก list
+                  </button>
+                  <button type="button" onClick={() => set("useCustomProcedure", true)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${form.useCustomProcedure ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                    พิมพ์เอง
+                  </button>
+                </div>
+                {form.useCustomProcedure ? (
+                  <TextInput value={form.procedureNameCustom} onChange={(v) => set("procedureNameCustom", v)} placeholder="ระบุหัตถการ..." />
+                ) : (
+                  <Select value={form.procedureName} onChange={(v) => set("procedureName", v)}
+                    options={procedures.map((p) => ({ value: p.value, label: p.label }))}
+                    placeholder={form.mainGroup ? "เลือกหัตถการ" : "เลือก Main Group ก่อน"}
+                    disabled={!form.mainGroup} />
+                )}
+              </div>
             </Field>
           </Section>
 
@@ -315,27 +347,47 @@ function NewOperationForm() {
               Section 2: ข้อมูลผู้ป่วย & แพทย์
           ═══════════════════════════════ */}
           <Section title="ข้อมูลผู้ป่วย & ทีมผ่าตัด">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Pre-op Diagnosis" required error={errors.diagnosisGroup}>
-                <Select
-                  value={form.diagnosisGroup}
-                  onChange={(v) => set("diagnosisGroup", v as ORFormState["diagnosisGroup"])}
-                  options={DIAGNOSIS_GROUPS.map((d) => ({ value: d, label: d }))}
-                  placeholder="เลือก Diagnosis"
-                />
-              </Field>
+            <Field label="Pre-op Diagnosis" required error={errors.diagnosisGroup}>
+              <div className="space-y-2">
+                <div className="flex gap-2 mb-1">
+                  <button type="button" onClick={() => set("useCustomDiagnosis", false)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${!form.useCustomDiagnosis ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                    เลือกจาก list
+                  </button>
+                  <button type="button" onClick={() => set("useCustomDiagnosis", true)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${form.useCustomDiagnosis ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                    พิมพ์เอง
+                  </button>
+                </div>
+                {form.useCustomDiagnosis ? (
+                  <TextInput value={form.diagnosisGroupCustom} onChange={(v) => set("diagnosisGroupCustom", v)} placeholder="ระบุ diagnosis..." />
+                ) : (
+                  <Select value={form.diagnosisGroup} onChange={(v) => set("diagnosisGroup", v as ORFormState["diagnosisGroup"])}
+                    options={DIAGNOSIS_GROUPS.map((d) => ({ value: d, label: d }))} placeholder="เลือก Diagnosis" />
+                )}
+              </div>
+            </Field>
 
-              <Field label="Post-op Diagnosis">
-                <Select
-                  value={form.postOpDiagnosis}
-                  onChange={(v) => set("postOpDiagnosis", v as ORFormState["postOpDiagnosis"])}
-                  options={[
-                    { value: "", label: "—" },
-                    ...DIAGNOSIS_GROUPS.map((d) => ({ value: d, label: d })),
-                  ]}
-                />
-              </Field>
-            </div>
+            <Field label="Post-op Diagnosis">
+              <div className="space-y-2">
+                <div className="flex gap-2 mb-1">
+                  <button type="button" onClick={() => set("useCustomPostOpDiagnosis", false)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${!form.useCustomPostOpDiagnosis ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                    เลือกจาก list
+                  </button>
+                  <button type="button" onClick={() => set("useCustomPostOpDiagnosis", true)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${form.useCustomPostOpDiagnosis ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                    พิมพ์เอง
+                  </button>
+                </div>
+                {form.useCustomPostOpDiagnosis ? (
+                  <TextInput value={form.postOpDiagnosisCustom} onChange={(v) => set("postOpDiagnosisCustom", v)} placeholder="ระบุ post-op diagnosis..." />
+                ) : (
+                  <Select value={form.postOpDiagnosis} onChange={(v) => set("postOpDiagnosis", v as ORFormState["postOpDiagnosis"])}
+                    options={[{ value: "", label: "—" }, ...DIAGNOSIS_GROUPS.map((d) => ({ value: d, label: d }))]} />
+                )}
+              </div>
+            </Field>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <Field label="เพศ">
