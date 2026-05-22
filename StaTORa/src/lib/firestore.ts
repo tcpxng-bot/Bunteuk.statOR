@@ -121,6 +121,15 @@ export async function updateOperation(
 }
 
 export async function deleteOperation(id: string): Promise<void> {
+  // ดึง operation ก่อนเพื่อหา preOpCaseId ที่ link กัน
+  const opSnap = await getDoc(doc(db, "operations", id));
+  if (opSnap.exists()) {
+    const opData = opSnap.data() as OperationDoc;
+    // ลบ preOpCase ที่ link กันด้วย (ถ้ามี)
+    if (opData.preOpCaseId) {
+      await deleteDoc(doc(db, "preOpCases", opData.preOpCaseId));
+    }
+  }
   await deleteDoc(doc(db, "operations", id));
 }
 
@@ -186,6 +195,10 @@ export async function createPreOpCase(
   });
   await updateDoc(ref, { id: ref.id });
   return ref.id;
+}
+
+export async function deletePreOpCase(id: string): Promise<void> {
+  await deleteDoc(doc(db, "preOpCases", id));
 }
 
 export async function updatePreOpCase(
