@@ -1,7 +1,7 @@
 // src/app/page.tsx
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,6 +10,32 @@ import { usePendingCases } from "@/hooks/usePendingCases";
 import { OperationDoc, PreOpCaseDoc } from "@/types/database";
 
 type Tab = "today" | "tomorrow";
+
+
+// ── Count Up animation hook ──────────────────
+function useCountUp(target: number, duration = 1200, delay = 0) {
+  const [value, setValue] = useState(0);
+  const rafRef = useRef<number>();
+  useEffect(() => {
+    setValue(0);
+    const timeout = setTimeout(() => {
+      const start = performance.now();
+      const tick = (now: number) => {
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        setValue(Math.round(eased * target));
+        if (progress < 1) rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    }, delay);
+    return () => {
+      clearTimeout(timeout);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [target, duration, delay]);
+  return value;
+}
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<Tab>("today");
@@ -79,11 +105,11 @@ export default function DashboardPage() {
         </div>
 
         {/* Today / Tomorrow tabs */}
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit mb-6">
+        <div className="flex gap-1 p-1 rounded-xl w-fit mb-6" style={{background: "#E1F5EE"}}>
           <button
             onClick={() => setActiveTab("today")}
             className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === "today" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              activeTab === "today" ? "bg-white font-medium" : "hover:bg-white/50"
             }`}
           >
             Today
@@ -101,7 +127,7 @@ export default function DashboardPage() {
           <button
             onClick={() => setActiveTab("tomorrow")}
             className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === "tomorrow" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              activeTab === "tomorrow" ? "bg-white font-medium" : "hover:bg-white/50"
             }`}
           >
             Tomorrow
@@ -132,14 +158,14 @@ export default function DashboardPage() {
           ) : stats ? (
             <>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-                <StatCard label="ทั้งหมด" value={stats.total} color="teal" />
-                <StatCard label="Elective" value={stats.elective} sub={`${stats.electivePercent}%`} color="blue" />
-                <StatCard label="Emergency" value={stats.emergency} sub={`${stats.emergencyPercent}%`} color="amber" />
+                <StatCard label="ทั้งหมด" value={stats.total} color="teal" animate />
+                <StatCard label="Elective" value={stats.elective} sub={`${stats.electivePercent}%`} color="blue" animate />
+                <StatCard label="Emergency" value={stats.emergency} sub={`${stats.emergencyPercent}%`} color="amber" animate />
                 <StatCard label="Complication" value={`${stats.complicationRate}%`} color="red" />
               </div>
 
               {stats.topProcedures.length > 0 && (
-                <div className="rounded-2xl bg-white border border-gray-100 p-5 mb-6">
+                <div className="rounded-2xl p-5 mb-6" style={{background: "#fff", border: "0.5px solid #D9EDE6"}}>
                   <h3 className="text-sm font-medium text-gray-700 mb-4">Top 5 หัตถการ</h3>
                   <div className="space-y-3">
                     {stats.topProcedures.map((proc) => {
@@ -174,7 +200,7 @@ export default function DashboardPage() {
               )}
 
               {stats.groups.length > 0 && (
-                <div className="rounded-2xl bg-white border border-gray-100 p-5">
+                <div className="rounded-2xl p-5" style={{background: "#fff", border: "0.5px solid #D9EDE6"}}>
                   <h3 className="text-sm font-medium text-gray-700 mb-4">แยกตาม Main Group</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {stats.groups.map(([group, count]) => (
@@ -335,15 +361,27 @@ function TomorrowTab({ cases, loading }: { cases: PreOpCaseDoc[]; loading: boole
   );
 }
 
-function StatCard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color: "teal" | "blue" | "amber" | "red" }) {
-  const colors = { teal: "bg-teal-50 border-teal-100", blue: "bg-blue-50 border-blue-100", amber: "bg-amber-50 border-amber-100", red: "bg-red-50 border-red-100" };
-  const textColors = { teal: "text-teal-700", blue: "text-blue-700", amber: "text-amber-700", red: "text-red-700" };
+function StatCard({ label, value, sub, color, animate = false }: { label: string; value: string | number; sub?: string; color: "teal" | "blue" | "amber" | "red"; animate?: boolean }) {
+  const numericValue = typeof value === "number" ? value : parseFloat(String(value)) || 0;
+  const isNumeric = typeof value === "number" || (!isNaN(parseFloat(String(value))) && !String(value).includes("%"));
+  const animated = useCountUp(isNumeric && animate ? numericValue : numericValue, 1000, 0);
+
+  const styles = {
+    teal: { bg: "#E1F5EE", text: "#085041", sub: "#0F6E56" },
+    blue: { bg: "#EEEDFE", text: "#3C3489", sub: "#534AB7" },
+    amber: { bg: "#FAEEDA", text: "#633806", sub: "#854F0B" },
+    red: { bg: "#FCEBEB", text: "#791F1F", sub: "#A32D2D" },
+  };
+  const s = styles[color];
+
   return (
-    <div className={`rounded-2xl border px-4 py-4 ${colors[color]}`}>
-      <div className={`text-2xl font-mono font-medium ${textColors[color]}`}>{value}</div>
+    <div className="rounded-2xl px-4 py-4" style={{ background: s.bg }}>
+      <div className="text-2xl font-mono font-medium" style={{ color: s.text }}>
+        {animate && isNumeric ? animated : value}
+      </div>
       <div className="flex items-center gap-2 mt-1">
-        <span className="text-xs text-gray-500">{label}</span>
-        {sub && <span className="text-xs text-gray-400">{sub}</span>}
+        <span className="text-xs" style={{ color: s.sub }}>{label}</span>
+        {sub && <span className="text-xs" style={{ color: s.sub, opacity: 0.7 }}>{sub}</span>}
       </div>
     </div>
   );
