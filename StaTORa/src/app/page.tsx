@@ -15,7 +15,7 @@ type Tab = "today" | "tomorrow";
 // ── Count Up animation hook ──────────────────
 function useCountUp(target: number, duration = 1200, delay = 0) {
   const [value, setValue] = useState(0);
-  const rafRef = useRef<number>();
+  const rafRef = useRef<number | undefined>(undefined);
   useEffect(() => {
     setValue(0);
     const timeout = setTimeout(() => {
