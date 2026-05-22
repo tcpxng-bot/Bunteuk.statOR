@@ -174,11 +174,8 @@ export function Sidebar() {
               <div key={item.label}>
                 <button
                   onClick={() => setExpandedSection(isExpanded ? null : item.label)}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
-                    childActive
-                      ? "text-teal-800 font-medium" style={{background: "#E1F5EE", borderRadius: "12px"}}
-                      : "text-gray-500 hover:text-gray-900" style={{borderRadius: "12px"}}
-                  }`}
+                  className={`flex w-full items-center gap-3 px-3 py-2.5 text-sm transition-colors ${childActive ? "text-teal-800 font-medium" : "text-gray-500 hover:text-gray-900"}`}
+                  style={{ borderRadius: "12px", background: childActive ? "#E1F5EE" : "transparent" }}
                 >
                   <span className={childActive ? "text-teal-700" : "text-gray-400"}>
                     {item.icon}
@@ -201,11 +198,8 @@ export function Sidebar() {
                         <button
                           key={child.href}
                           onClick={() => router.push(child.href)}
-                          className={`block w-full text-left rounded-md px-3 py-2 text-sm transition-colors ${
-                            childIsActive
-                              ? "text-teal-700 font-medium" style={{background: "#E1F5EE", borderRadius: "8px"}}
-                              : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
-                          }`}
+                          className={`block w-full text-left px-3 py-2 text-sm transition-colors ${childIsActive ? "text-teal-700 font-medium" : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"}`}
+                          style={{ borderRadius: "8px", background: childIsActive ? "#E1F5EE" : "transparent" }}
                         >
                           {child.label}
                         </button>
