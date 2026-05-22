@@ -43,6 +43,7 @@ export default function StretcherPage() {
   const [preOpDx, setPreOpDx] = useState("");
   const [hnLast3, setHnLast3] = useState("");
   const [opDate, setOpDate] = useState<string>(getDefaultOpDate());
+  const [patientType, setPatientType] = useState<"OPD" | "IPD">("OPD");
   const [planConsultUro, setPlanConsultUro] = useState(false);
   const [planConsultColo, setPlanConsultColo] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -88,12 +89,13 @@ export default function StretcherPage() {
         hnLast3,
         setReady: false,
         chargeWritten: false,
+        patientType,
         planConsultUro,
         planConsultColo,
         createdBy: user?.uid || "",
       });
       setProcName(""); setSurgeon(""); setPreOpDx(""); setHnLast3("");
-      setPlanConsultUro(false); setPlanConsultColo(false);
+      setPatientType("OPD"); setPlanConsultUro(false); setPlanConsultColo(false);
       // Switch view to the date we just added
       setSelectedDate(opDate);
       setShowAdd(false);
@@ -181,6 +183,18 @@ export default function StretcherPage() {
               </div>
 
               <div>
+                <p className="text-sm text-gray-600 font-medium mb-2">ประเภทผู้ป่วย</p>
+                <div className="flex gap-2">
+                  {(["OPD", "IPD"] as const).map((type) => (
+                    <button key={type} type="button" onClick={() => setPatientType(type)}
+                      className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${patientType === type ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
                 <p className="text-sm text-gray-600 font-medium mb-2">Plan Consult ล่วงหน้า</p>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
@@ -231,6 +245,7 @@ export default function StretcherPage() {
                     <span>·</span>
                     <span>HN-xxxx{c.hnLast3}</span>
                     {c.preOpDiagnosis && <><span>·</span><span>{c.preOpDiagnosis}</span></>}
+                    {c.patientType && <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${c.patientType === "IPD" ? "bg-purple-50 text-purple-700" : "bg-gray-100 text-gray-500"}`}>{c.patientType}</span>}
                     {c.planConsultUro && <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">Plan Uro</span>}
                     {c.planConsultColo && <span className="bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded">Plan Colo</span>}
                   </div>
