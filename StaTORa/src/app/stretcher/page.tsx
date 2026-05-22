@@ -9,7 +9,7 @@ import { AppShell } from "@/components/AppShell";
 import { Field, Select, TextInput } from "@/components/FormFields";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDropdownList } from "@/hooks/useDropdowns";
-import { createPreOpCase, updatePreOpCase } from "@/lib/firestore";
+import { createPreOpCase, updatePreOpCase, deletePreOpCase } from "@/lib/firestore";
 import { PreOpCaseDoc } from "@/types/database";
 
 // Default date — ศุกร์ → จันทร์, เสาร์ → จันทร์, อื่นๆ → พรุ่งนี้
@@ -47,6 +47,8 @@ export default function StretcherPage() {
   const [planConsultUro, setPlanConsultUro] = useState(false);
   const [planConsultColo, setPlanConsultColo] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [statusModal, setStatusModal] = useState<{ id: string; current?: string } | null>(null);
   const [statusNote, setStatusNote] = useState("");
 
@@ -74,6 +76,18 @@ export default function StretcherPage() {
 
     return () => unsub();
   }, [selectedDate]);
+
+  const handleDelete = async (id: string) => {
+    setDeleting(true);
+    try {
+      await deletePreOpCase(id);
+      setDeleteConfirm(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleAdd = async (e: FormEvent) => {
     e.preventDefault();
@@ -278,6 +292,10 @@ export default function StretcherPage() {
                     className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${c.chargeWritten ? "bg-green-50 text-green-700 hover:bg-green-100" : "bg-gray-100 text-gray-400 hover:bg-gray-200"}`}>
                     {c.chargeWritten ? "✓" : "○"} Charge
                   </button>
+                  <button onClick={() => setDeleteConfirm(c.id)}
+                    className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium bg-red-50 text-red-500 hover:bg-red-100 transition-colors">
+                    ลบ
+                  </button>
                 </div>
               </div>
             ))}
@@ -290,6 +308,26 @@ export default function StretcherPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirm Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <h3 className="font-medium text-gray-900 mb-2">ลบเคสนี้?</h3>
+            <p className="text-xs text-red-500 mb-6">การลบไม่สามารถย้อนกลับได้</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteConfirm(null)}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm text-gray-600 hover:bg-gray-50">
+                ยกเลิก
+              </button>
+              <button onClick={() => handleDelete(deleteConfirm)} disabled={deleting}
+                className="flex-1 rounded-xl bg-red-500 text-white py-2.5 text-sm font-medium hover:bg-red-600 disabled:opacity-60">
+                {deleting ? "กำลังลบ..." : "ลบเคส"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Surgery Status Modal */}
       {statusModal && (
