@@ -215,11 +215,8 @@ export function Sidebar() {
             <button
               key={item.href}
               onClick={() => router.push(item.href)}
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
-                isActive
-                  ? "text-teal-700 font-medium" style={{background: "#E1F5EE", borderRadius: "8px"}}
-                  : "text-gray-500 hover:text-gray-900" style={{borderRadius: "12px"}}
-              }`}
+              className={`flex w-full items-center gap-3 px-3 py-2.5 text-sm transition-colors ${isActive ? "text-teal-700 font-medium" : "text-gray-500 hover:text-gray-900"}`}
+              style={{ borderRadius: "12px", background: isActive ? "#E1F5EE" : "transparent" }}
             >
               <span className={isActive ? "text-teal-700" : "text-gray-400"}>
                 {item.icon}
