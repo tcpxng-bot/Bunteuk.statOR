@@ -287,7 +287,7 @@ function NewOperationForm() {
               Section 1: ข้อมูลหลัก
           ═══════════════════════════════ */}
           <Section title="ข้อมูลหลัก">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-4">
               <Field label="วันที่ผ่าตัด" required error={errors.operationDate}>
                 <TextInput
                   type="date"
@@ -702,7 +702,7 @@ function Section({
 
   return (
     <div
-      className={`rounded-2xl bg-white border border-gray-100 p-5 lg:p-6 space-y-5 ${
+      className={`rounded-2xl bg-white border border-gray-100 p-5 lg:p-6 space-y-5 overflow-hidden ${
         accent ? `border-l-4 ${borderColors[accent]}` : ""
       }`}
     >
