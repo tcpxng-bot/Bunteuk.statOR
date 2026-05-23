@@ -276,6 +276,12 @@ function TodayTab({
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-gray-900 truncate">{c.procedureName}</div>
                     <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
+                      {c.operationDate && (
+                        <span className="font-medium text-orange-600">
+                          {c.operationDate.toDate().toLocaleDateString("th-TH", { day: "numeric", month: "short" })}
+                        </span>
+                      )}
+                      {c.operationDate && <span>·</span>}
                       <span>{c.surgeon}</span>
                       <span>·</span>
                       <span>HN-xxxx{c.hnLast3}</span>
