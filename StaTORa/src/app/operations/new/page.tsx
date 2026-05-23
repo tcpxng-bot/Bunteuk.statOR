@@ -125,9 +125,12 @@ function NewOperationForm() {
       setPreOpCase(c);
       setForm((prev) => ({
         ...prev,
-        procedureName: c.procedureName,
+        // ใช้ custom input เสมอสำหรับ pre-fill เพราะข้อมูลอาจไม่ match dropdown
+        useCustomProcedure: true,
+        procedureNameCustom: c.procedureName,
+        useCustomDiagnosis: !!c.preOpDiagnosis,
+        diagnosisGroupCustom: c.preOpDiagnosis || "",
         surgeon: c.surgeon,
-        diagnosisGroup: c.preOpDiagnosis as any || prev.diagnosisGroup,
         operationDate: c.operationDate.toDate().toISOString().split("T")[0],
       }));
     });
